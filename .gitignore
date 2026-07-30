@@ -1,0 +1,11 @@
+# dependencies
+node_modules/
+services/*/node_modules/
+
+# build output
+services/*/dist/
+
+# misc
+.DS_Store
+*.pem
+npm-debug.log*

@@ -1,0 +1,132 @@
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: hireheaven-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.6.1
+    container_name: hireheaven-zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+
+  kafka:
+    image: confluentinc/cp-kafka:7.6.1
+    container_name: hireheaven-kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+
+  auth:
+    build: ./services/auth
+    container_name: hireheaven-auth
+    env_file: ./services/auth/.env
+    environment:
+      Redis_url: redis://redis:6379
+      Kafka_Broker: kafka:29092
+    ports:
+      - "5000:5000"
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  utils:
+    build: ./services/utils
+    container_name: hireheaven-utils
+    env_file: ./services/utils/.env
+    environment:
+      Redis_url: redis://redis:6379
+      Kafka_Broker: kafka:29092
+    ports:
+      - "5001:5001"
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+
+  user:
+    build: ./services/user
+    container_name: hireheaven-user
+    env_file: ./services/user/.env
+    environment:
+      Redis_url: redis://redis:6379
+      UPLOAD_SERVICE: http://utils:5001
+    ports:
+      - "5002:5002"
+    depends_on:
+      redis:
+        condition: service_healthy
+      utils:
+        condition: service_started
+
+  job:
+    build: ./services/job
+    container_name: hireheaven-job
+    env_file: ./services/job/.env
+    environment:
+      Redis_url: redis://redis:6379
+      Kafka_Broker: kafka:29092
+      UPLOAD_SERVICE: http://utils:5001
+    ports:
+      - "5003:5003"
+    depends_on:
+      redis:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      utils:
+        condition: service_started
+
+  payment:
+    build: ./services/payment
+    container_name: hireheaven-payment
+    env_file: ./services/payment/.env
+    environment:
+      Redis_url: redis://redis:6379
+    ports:
+      - "5004:5004"
+    depends_on:
+      redis:
+        condition: service_healthy
+
+  frontend:
+    build: ./frontend
+    container_name: hireheaven-frontend
+    env_file: ./frontend/.env
+    environment:
+      NEXT_PUBLIC_AUTH_SERVICE_URL: http://localhost:5000
+      NEXT_PUBLIC_UTILS_SERVICE_URL: http://localhost:5001
+      NEXT_PUBLIC_USER_SERVICE_URL: http://localhost:5002
+      NEXT_PUBLIC_JOB_SERVICE_URL: http://localhost:5003
+      NEXT_PUBLIC_PAYMENT_SERVICE_URL: http://localhost:5004
+    ports:
+      - "3000:3000"
+    depends_on:
+      - auth
+      - user
+      - job
+      - payment
+      - utils
+
+volumes:
+  redis-data:
