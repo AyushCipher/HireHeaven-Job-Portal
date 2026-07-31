@@ -12,6 +12,7 @@ export type { Logger } from "./logger.js";
 export { createMetrics } from "./metrics.js";
 export { createHealthHandler } from "./health.js";
 export { requireRole } from "./roles.js";
+export { createKafkaClient } from "./kafka.js";
 export {
   signAccessToken,
   signRefreshToken,

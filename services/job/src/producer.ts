@@ -1,4 +1,5 @@
-import { Kafka, Producer, Admin } from "kafkajs";
+import { Producer, Admin } from "kafkajs";
+import { createKafkaClient } from "@hireheaven/common";
 import dotenv from "dotenv";
 dotenv.config();
 
@@ -7,10 +8,7 @@ let admin: Admin;
 
 export const connectKafka = async () => {
   try {
-    const kafka = new Kafka({
-      clientId: "auth-service",
-      brokers: [process.env.Kafka_Broker || "localhost:9092"],
-    });
+    const kafka = createKafkaClient("job-service");
 
     admin = kafka.admin();
     await admin.connect();

@@ -1,4 +1,4 @@
-import { Kafka } from "kafkajs";
+import { createKafkaClient } from "@hireheaven/common";
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
 
@@ -6,10 +6,7 @@ dotenv.config();
 
 export const startSendMailConsumer = async () => {
   try {
-    const kafka = new Kafka({
-      clientId: "mail-service",
-      brokers: [process.env.Kafka_Broker || "localhost:9092"],
-    });
+    const kafka = createKafkaClient("mail-service");
 
     const consumer = kafka.consumer({ groupId: "mail-service-group" });
 
