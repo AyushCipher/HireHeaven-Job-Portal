@@ -37,11 +37,17 @@ export const createCache = (redisClient: RedisClientType) => {
     try {
       const keys: string[] = [];
 
-      for await (const key of redisClient.scanIterator({
+      // node-redis's scanIterator yields batches (arrays of keys) per
+      // iteration, not one key at a time — flatten to a single key list.
+      for await (const batch of redisClient.scanIterator({
         MATCH: `${prefix}*`,
         COUNT: 100,
       })) {
-        keys.push(key as unknown as string);
+        if (Array.isArray(batch)) {
+          keys.push(...(batch as unknown as string[]));
+        } else {
+          keys.push(batch as unknown as string);
+        }
       }
 
       if (keys.length > 0) {

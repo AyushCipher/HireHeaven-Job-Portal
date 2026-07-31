@@ -164,7 +164,7 @@ job-portal/
 
 ### Quick Start (Docker Compose)
 
-The fastest way to get Redis, Kafka, the gateway, all five backend services, and the frontend running together:
+First, copy each `.env.example` to `.env` and fill in your own values (see step 4 of Manual Setup below for the exact commands and which values are required). Then:
 
 ```bash
 docker compose up --build
@@ -187,7 +187,18 @@ npm install
 npm run build --workspace=@hireheaven/common
 ```
 
-4. Each service already ships a `.env` file pre-filled with working local defaults for `PORT`, `JWT_SEC` (shared across auth/job/payment/user so tokens verify across services), `Redis_url` (`redis://localhost:6379`), and `Kafka_Broker` (`localhost:9092`). You only need to fill in the real, account-specific values: `DB_URL` (Neon), Cloudinary keys, `Razorpay_Key`/`Razorpay_Secret`, and `API_KEY_GEMINI`. **Treat these `.env` files as local-development convenience only — rotate every secret before using this project anywhere public, and never commit real production credentials.**
+4. Each service ships a `.env.example` (committed) — copy it to `.env` (gitignored, never committed) and fill in your own values:
+
+```bash
+cp services/auth/.env.example services/auth/.env
+cp services/job/.env.example services/job/.env
+cp services/user/.env.example services/user/.env
+cp services/payment/.env.example services/payment/.env
+cp services/utils/.env.example services/utils/.env
+cp frontend/.env.example frontend/.env
+```
+
+`PORT`, `Redis_url` (`redis://localhost:6379`), and `Kafka_Broker` (`localhost:9092`) already have working local defaults. You need to fill in: a `JWT_SEC` (any random string, but the **same value** in `auth`/`job`/`payment`/`user` since tokens issued by auth must verify in the others — generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), `DB_URL` (Neon), Cloudinary keys, `Razorpay_Key`/`Razorpay_Secret`, and `API_KEY_GEMINI`. **Never commit a `.env` file with real values — only `.env.example` (placeholders) is tracked in git.**
 5. Start Redis and Kafka yourself (or via `docker compose up redis zookeeper kafka`) if you're running services with `npm run dev` instead of Docker Compose.
 
 ## Environment Variables
@@ -435,7 +446,7 @@ Every service (including the gateway) exposes:
 - Add distributed tracing (e.g. OpenTelemetry) across the gateway and services, correlated by request ID.
 - Build a frontend admin dashboard on top of the existing admin API endpoints (currently API-only).
 - Add sorting and advanced filters (salary range, job type, work location) to the job search flow.
-- Move `.env` files out of version control (use `.env.example` + a secrets manager) once this project is used for anything beyond local evaluation.
+- Use a proper secrets manager (e.g. your deployment platform's env var store, or Doppler/Vault) instead of local `.env` files as the project grows beyond a single deployer.
 - Add end-to-end tests (Playwright/Cypress) covering the full signup → apply → payment flow through the gateway.
 - Add token-bucket or per-user (not just per-IP) rate limiting for authenticated endpoints.
 

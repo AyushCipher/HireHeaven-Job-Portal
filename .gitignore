@@ -7,6 +7,10 @@ packages/*/node_modules/
 services/*/dist/
 packages/*/dist/
 
+# secrets — never commit real .env files, only .env.example
+services/*/.env
+frontend/.env
+
 # misc
 .DS_Store
 *.pem

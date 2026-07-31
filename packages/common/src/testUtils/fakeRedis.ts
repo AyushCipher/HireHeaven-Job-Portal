@@ -39,17 +39,26 @@ export const createFakeRedisClient = () => {
       }
       return count;
     },
+    // Mirrors real node-redis: each iteration yields a BATCH (array) of
+    // keys, not a single key — a mismatch here previously hid a real bug
+    // (invalidateByPrefix passing a batch-of-batches to del()).
     scanIterator(options?: { MATCH?: string; COUNT?: number }) {
       const pattern = options?.MATCH;
       const prefix = pattern?.endsWith("*") ? pattern.slice(0, -1) : pattern;
+      const batchSize = 2;
 
       const keys = Array.from(store.keys()).filter((key) =>
         prefix ? key.startsWith(prefix) : true
       );
 
+      const batches: string[][] = [];
+      for (let i = 0; i < keys.length; i += batchSize) {
+        batches.push(keys.slice(i, i + batchSize));
+      }
+
       return (async function* () {
-        for (const key of keys) {
-          yield key;
+        for (const batch of batches) {
+          yield batch;
         }
       })();
     },

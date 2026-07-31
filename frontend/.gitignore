@@ -30,7 +30,8 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# env files (local overrides only — .env itself is tracked for out-of-the-box runnability)
+# env files (never commit real values — see .env.example)
+.env
 .env.local
 .env.*.local
 
