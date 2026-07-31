@@ -1,0 +1,38 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install workspace dependencies
+        run: npm ci
+
+      # @hireheaven/common must be built before the services that consume it,
+      # since they resolve it via its compiled dist/ output.
+      - name: Build shared package
+        run: npm run build --workspace=@hireheaven/common
+
+      - name: Typecheck all workspaces
+        run: npm run typecheck --workspaces --if-present
+
+      - name: Build all workspaces
+        run: npm run build --workspaces --if-present
+
+      - name: Run tests
+        run: npm run test --workspaces --if-present

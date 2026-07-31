@@ -16,6 +16,20 @@ async function initDb() {
     END$$;
     `;
 
+    // ALTER TYPE ... ADD VALUE cannot run inside a DO block/transaction, so
+    // this check-then-add has to happen as two separate top-level statements.
+    const [{ exists: adminRoleExists }] = await sql`
+      SELECT EXISTS (
+        SELECT 1 FROM pg_enum
+        WHERE enumlabel = 'admin'
+        AND enumtypid = (SELECT oid FROM pg_type WHERE typname = 'user_role')
+      ) AS exists
+    `;
+
+    if (!adminRoleExists) {
+      await sql`ALTER TYPE user_role ADD VALUE 'admin'`;
+    }
+
     await sql`
       CREATE TABLE IF NOT EXISTS users (
          user_id SERIAL PRIMARY KEY,

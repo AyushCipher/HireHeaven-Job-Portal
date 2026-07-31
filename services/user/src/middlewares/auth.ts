@@ -1,13 +1,18 @@
 import { NextFunction, Request, Response } from "express";
-import jwt, { JwtPayload } from "jsonwebtoken";
 import { sql } from "../utils/db.js";
+import { redisClient } from "../utils/redisClient.js";
+import {
+  AccessTokenPayload,
+  isAccessTokenBlacklisted,
+  verifyToken,
+} from "@hireheaven/common";
 
 interface User {
   user_id: number;
   name: string;
   email: string;
   phone_number: string;
-  role: "jobseeker" | "recruiter";
+  role: "jobseeker" | "recruiter" | "admin";
   bio: string | null;
   resume: string | null;
   resume_public_id: string | null;
@@ -38,14 +43,24 @@ export const isAuth = async (
 
     const token = authHeader.split(" ")[1];
 
-    const decodedPayload = jwt.verify(
+    const decodedPayload = verifyToken<AccessTokenPayload>(
       token,
       process.env.JWT_SEC as string
-    ) as JwtPayload;
+    );
 
-    if (!decodedPayload || !decodedPayload.id) {
+    if (!decodedPayload || !decodedPayload.id || decodedPayload.type !== "access") {
       res.status(401).json({
         message: "Invalid Token",
+      });
+      return;
+    }
+
+    if (
+      decodedPayload.jti &&
+      (await isAccessTokenBlacklisted(redisClient, decodedPayload.jti))
+    ) {
+      res.status(401).json({
+        message: "Token has been revoked. Please login again",
       });
       return;
     }

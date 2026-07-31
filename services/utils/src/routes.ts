@@ -1,6 +1,8 @@
 import express, { json } from "express";
 import cloudinary from "cloudinary";
-import { rateLimiter } from "./middlewares/rateLimiter.js";
+import { rateLimiter } from "./utils/redisClient.js";
+import { validate } from "@hireheaven/common";
+import { careerSchema, resumeAnalyserSchema, uploadSchema } from "./validators.js";
 
 const router = express.Router();
 
@@ -10,7 +12,7 @@ const aiLimiter = rateLimiter({
   prefix: "utils-ai",
 });
 
-router.post("/upload", async (req, res) => {
+router.post("/upload", validate(uploadSchema), async (req, res) => {
   try {
     const { buffer, public_id } = req.body;
 
@@ -38,17 +40,11 @@ dotenv.config();
 
 const ai = new GoogleGenAI({ apiKey: process.env.API_KEY_GEMINI });
 
-router.post("/career", aiLimiter, async (req, res) => {
+router.post("/career", aiLimiter, validate(careerSchema), async (req, res) => {
   try {
     const { skills } = req.body;
 
-    if (!skills) {
-      return res.status(400).json({
-        message: "Skills Required",
-      });
-    }
-
-    const prompt = ` 
+    const prompt = `
 Based on the following skills: ${skills}. 
  
 Please act as a career advisor and generate a career path suggestion. 
@@ -119,15 +115,15 @@ Mastery', 'DevOps & Cloud').",
   }
 });
 
-router.post("/resume-analyser", aiLimiter, async (req, res) => {
+router.post(
+  "/resume-analyser",
+  aiLimiter,
+  validate(resumeAnalyserSchema),
+  async (req, res) => {
   try {
     const { pdfBase64 } = req.body;
 
-    if (!pdfBase64) {
-      return res.status(400).json({ message: "PDF data is required" });
-    }
-
-    const prompt = ` 
+    const prompt = `
 You are an expert ATS (Applicant Tracking System) analyzer. Analyze the following resume 
 and provide: 
 1. An ATS compatibility score (0-100) 
@@ -221,6 +217,7 @@ Focus on: - File format and structure compatibility - Proper use of standard sec
       message: error.message,
     });
   }
-});
+  }
+);
 
 export default router;

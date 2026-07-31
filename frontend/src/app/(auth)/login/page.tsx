@@ -36,12 +36,17 @@ const LoginPage = () => {
 
       toast.success(data.message);
 
-      Cookies.set("token", data.token, {
-        expires: 15,
+      Cookies.set("token", data.accessToken, {
+        expires: 1 / 96,
         secure: false,
         path: "/",
       });
-      setUser(data.userObject);
+      Cookies.set("refreshToken", data.refreshToken, {
+        expires: 7,
+        secure: false,
+        path: "/",
+      });
+      setUser(data.user);
       setIsAuth(true);
       fetchApplications();
     } catch (error: any) {

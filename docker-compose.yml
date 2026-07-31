@@ -35,7 +35,11 @@ services:
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
 
   auth:
-    build: ./services/auth
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: auth
     container_name: hireheaven-auth
     env_file: ./services/auth/.env
     environment:
@@ -50,7 +54,11 @@ services:
         condition: service_started
 
   utils:
-    build: ./services/utils
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: utils
     container_name: hireheaven-utils
     env_file: ./services/utils/.env
     environment:
@@ -65,7 +73,11 @@ services:
         condition: service_started
 
   user:
-    build: ./services/user
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: user
     container_name: hireheaven-user
     env_file: ./services/user/.env
     environment:
@@ -80,7 +92,11 @@ services:
         condition: service_started
 
   job:
-    build: ./services/job
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: job
     container_name: hireheaven-job
     env_file: ./services/job/.env
     environment:
@@ -98,7 +114,11 @@ services:
         condition: service_started
 
   payment:
-    build: ./services/payment
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: payment
     container_name: hireheaven-payment
     env_file: ./services/payment/.env
     environment:
@@ -109,24 +129,45 @@ services:
       redis:
         condition: service_healthy
 
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.service
+      args:
+        SERVICE: gateway
+    container_name: hireheaven-gateway
+    environment:
+      Redis_url: redis://redis:6379
+      AUTH_SERVICE_URL: http://auth:5000
+      UTILS_SERVICE_URL: http://utils:5001
+      USER_SERVICE_URL: http://user:5002
+      JOB_SERVICE_URL: http://job:5003
+      PAYMENT_SERVICE_URL: http://payment:5004
+      PORT: 8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      redis:
+        condition: service_healthy
+      auth:
+        condition: service_started
+      user:
+        condition: service_started
+      job:
+        condition: service_started
+      payment:
+        condition: service_started
+      utils:
+        condition: service_started
+
   frontend:
     build: ./frontend
     container_name: hireheaven-frontend
     env_file: ./frontend/.env
-    environment:
-      NEXT_PUBLIC_AUTH_SERVICE_URL: http://localhost:5000
-      NEXT_PUBLIC_UTILS_SERVICE_URL: http://localhost:5001
-      NEXT_PUBLIC_USER_SERVICE_URL: http://localhost:5002
-      NEXT_PUBLIC_JOB_SERVICE_URL: http://localhost:5003
-      NEXT_PUBLIC_PAYMENT_SERVICE_URL: http://localhost:5004
     ports:
       - "3000:3000"
     depends_on:
-      - auth
-      - user
-      - job
-      - payment
-      - utils
+      - gateway
 
 volumes:
   redis-data:

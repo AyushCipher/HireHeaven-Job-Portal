@@ -1,15 +1,12 @@
-import { createClient } from "redis";
 import dotenv from "dotenv";
-
 dotenv.config();
 
-export const redisClient = createClient({
+import { createRedisClient, createRateLimiter, createCache } from "@hireheaven/common";
+
+export const redisClient = createRedisClient({
   url: process.env.Redis_url,
+  label: "Auth service",
 });
 
-redisClient.on("error", (err) => console.error("Redis Client Error", err));
-
-redisClient
-  .connect()
-  .then(() => console.log("connected to redis"))
-  .catch(console.error);
+export const rateLimiter = createRateLimiter(redisClient);
+export const cache = createCache(redisClient);

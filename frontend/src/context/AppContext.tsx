@@ -6,16 +6,101 @@ import toast, { Toaster } from "react-hot-toast";
 import Cookies from "js-cookie";
 import axios from "axios";
 
+// All five services default to the API gateway (single origin, port 8080).
+// Set an individual NEXT_PUBLIC_*_SERVICE_URL to bypass the gateway and talk
+// to that service directly (e.g. for debugging one service in isolation).
+const GATEWAY_URL =
+  process.env.NEXT_PUBLIC_API_GATEWAY_URL || "http://localhost:8080";
+
 export const utils_service =
-  process.env.NEXT_PUBLIC_UTILS_SERVICE_URL || "http://localhost:5001";
+  process.env.NEXT_PUBLIC_UTILS_SERVICE_URL || GATEWAY_URL;
 export const auth_service =
-  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || "http://localhost:5000";
+  process.env.NEXT_PUBLIC_AUTH_SERVICE_URL || GATEWAY_URL;
 export const user_service =
-  process.env.NEXT_PUBLIC_USER_SERVICE_URL || "http://localhost:5002";
+  process.env.NEXT_PUBLIC_USER_SERVICE_URL || GATEWAY_URL;
 export const job_service =
-  process.env.NEXT_PUBLIC_JOB_SERVICE_URL || "http://localhost:5003";
+  process.env.NEXT_PUBLIC_JOB_SERVICE_URL || GATEWAY_URL;
 export const payment_service =
-  process.env.NEXT_PUBLIC_PAYMENT_SERVICE_URL || "http://localhost:5004";
+  process.env.NEXT_PUBLIC_PAYMENT_SERVICE_URL || GATEWAY_URL;
+
+const ACCESS_TOKEN_COOKIE = "token";
+const REFRESH_TOKEN_COOKIE = "refreshToken";
+
+const setAuthCookies = (accessToken: string, refreshToken: string) => {
+  Cookies.set(ACCESS_TOKEN_COOKIE, accessToken, {
+    expires: 1 / 96, // ~15 minutes, matches the access token's own lifetime
+    secure: false,
+    path: "/",
+  });
+  Cookies.set(REFRESH_TOKEN_COOKIE, refreshToken, {
+    expires: 7,
+    secure: false,
+    path: "/",
+  });
+};
+
+const clearAuthCookies = () => {
+  Cookies.remove(ACCESS_TOKEN_COOKIE, { path: "/" });
+  Cookies.remove(REFRESH_TOKEN_COOKIE, { path: "/" });
+};
+
+// Transparently refreshes an expired access token using the refresh token
+// and retries the original request once. Registered globally so every
+// axios call in the app (not just ones made through this context) benefits.
+let refreshInFlight: Promise<string | null> | null = null;
+
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    if (
+      error.response?.status !== 401 ||
+      originalRequest?._retry ||
+      originalRequest?.url?.includes("/api/auth/refresh")
+    ) {
+      return Promise.reject(error);
+    }
+
+    const refreshToken = Cookies.get(REFRESH_TOKEN_COOKIE);
+
+    if (!refreshToken) {
+      return Promise.reject(error);
+    }
+
+    originalRequest._retry = true;
+
+    try {
+      if (!refreshInFlight) {
+        refreshInFlight = axios
+          .post(`${auth_service}/api/auth/refresh`, { refreshToken })
+          .then(({ data }) => {
+            setAuthCookies(data.accessToken, data.refreshToken);
+            return data.accessToken as string;
+          })
+          .finally(() => {
+            refreshInFlight = null;
+          });
+      }
+
+      const newAccessToken = await refreshInFlight;
+
+      if (!newAccessToken) {
+        return Promise.reject(error);
+      }
+
+      originalRequest.headers = {
+        ...originalRequest.headers,
+        Authorization: `Bearer ${newAccessToken}`,
+      };
+
+      return axios(originalRequest);
+    } catch (refreshError) {
+      clearAuthCookies();
+      return Promise.reject(refreshError);
+    }
+  }
+);
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
@@ -111,7 +196,19 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   }
 
   async function logoutUser() {
-    Cookies.set("token", "");
+    const refreshToken = Cookies.get(REFRESH_TOKEN_COOKIE);
+
+    try {
+      await axios.post(
+        `${auth_service}/api/auth/logout`,
+        { refreshToken },
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (error) {
+      console.log(error);
+    }
+
+    clearAuthCookies();
     setUser(null);
     setIsAuth(false);
     toast.success("Logged out successfully");
@@ -187,7 +284,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
   async function fetchApplications() {
     try {
       const { data } = await axios.get(
-        `${user_service}/api/user/application/all`,
+        `${user_service}/api/user/application/all?limit=100`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -195,7 +292,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
         }
       );
 
-      setApplications(data);
+      setApplications(data.data);
     } catch (error) {
       console.log(error);
     }

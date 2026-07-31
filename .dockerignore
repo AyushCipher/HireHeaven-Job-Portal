@@ -1,0 +1,10 @@
+**/node_modules
+**/dist
+**/.next
+frontend
+.git
+.github
+*.md
+.env
+services/*/.env
+docker-compose.yml

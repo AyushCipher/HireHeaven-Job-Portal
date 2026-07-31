@@ -54,12 +54,17 @@ const RegisterPage = () => {
 
       toast.success(data.message);
 
-      Cookies.set("token", data.token, {
-        expires: 15,
+      Cookies.set("token", data.accessToken, {
+        expires: 1 / 96,
         secure: false,
         path: "/",
       });
-      setUser(data.registeredUser);
+      Cookies.set("refreshToken", data.refreshToken, {
+        expires: 7,
+        secure: false,
+        path: "/",
+      });
+      setUser(data.user);
       setIsAuth(true);
     } catch (error: any) {
       toast.error(error.response.data.message);

@@ -9,43 +9,51 @@
 
 HireHeaven is a modern job portal built with a microservices architecture and a polished Next.js frontend. It connects job seekers, recruiters, and AI-driven career tools into one production-style platform for discovering jobs, managing applications, posting opportunities, analyzing resumes, and generating personalized career guidance.
 
-The project was designed to demonstrate real-world engineering depth: authenticated user flows, role-based experiences, external service integrations, AI-assisted features, and service-oriented backend boundaries.
+The project was designed to demonstrate real-world engineering depth: authenticated user flows, role-based experiences, external service integrations, AI-assisted features, service-oriented backend boundaries, and the operational scaffolding (gateway, observability, tests, CI) that separates a demo from a production-style system.
 
 ## Key Features
 
-- Role-based experience for job seekers and recruiters.
-- JWT-authenticated account management and profile updates.
-- Job browsing, searching, application tracking, and recruiter job posting.
+- Role-based experience for job seekers, recruiters, and admins.
+- JWT access + refresh token authentication with Redis-backed revocation (logout invalidates both tokens server-side).
+- Job browsing, searching, application tracking, and recruiter job posting, with paginated listings.
 - Company management for recruiter workflows.
-- AI-powered resume ATS analysis.
-- AI-powered career path recommendations from skill inputs.
+- Admin moderation endpoints: list/deactivate any job, list/remove any company, list all users.
+- AI-powered resume ATS analysis and AI-powered career path recommendations.
 - Subscription and payment flow powered by Razorpay.
 - File upload support for resumes, profile photos, and company logos.
 - Event-driven backend components using Kafka and Redis.
 - Redis-backed rate limiting on every service (stricter limits on auth, payment, and AI endpoints) to protect against brute force and abuse.
 - Redis cache-aside layer for job listings, job details, company details, and user profiles, with explicit invalidation on writes.
+- Zod request validation at every mutating endpoint across all services.
+- A single API gateway in front of all five services, so the frontend (and any other client) talks to one origin.
+- Structured logging (pino), Prometheus-style `/metrics`, and `/health` checks on every service.
+- Shared `@hireheaven/common` package (npm workspaces) for error handling, Redis clients, rate limiting, caching, validation, logging, metrics, and tokens — no copy-pasted utilities.
+- Automated tests (Vitest) and a GitHub Actions CI pipeline that typechecks, builds, and tests every workspace.
 - Cloudinary-based media storage and Gemini-powered AI responses.
-- One-command local startup via Docker Compose (Redis, Kafka/Zookeeper, and all five services).
+- One-command local startup via Docker Compose (Redis, Kafka/Zookeeper, the gateway, all five services, and the frontend).
 
 ## Project Architecture
 
-The system is split into a Next.js frontend and five backend services. Each service owns its own responsibility and communicates through HTTP, shared data stores, and asynchronous infrastructure where needed.
+The system is a Next.js frontend, an API gateway, and five backend services, all managed as an npm workspaces monorepo. The frontend and every other client talk only to the gateway; the gateway proxies to the right service by path prefix. Each service owns its own responsibility and communicates through HTTP, a shared Postgres database, and asynchronous infrastructure where needed.
 
 ```mermaid
 flowchart LR
   U[User / Recruiter] --> F[Next.js Frontend]
-  F --> A[Auth Service]
-  F --> US[User Service]
-  F --> J[Job Service]
-  F --> P[Payment Service]
-  F --> X[Utils Service]
+  F --> GW[API Gateway :8080]
+
+  GW --> A[Auth Service]
+  GW --> US[User Service]
+  GW --> J[Job Service]
+  GW --> P[Payment Service]
+  GW --> X[Utils Service]
 
   A --> DB[(Neon PostgreSQL)]
   J --> DB
   US --> DB
   P --> DB
 
-  A --> R[(Redis)]
+  GW --> R[(Redis)]
+  A --> R
   US --> R
   J --> R
   P --> R
@@ -58,7 +66,7 @@ flowchart LR
   P --> RZ[(Razorpay)]
 ```
 
-Redis serves two purposes here: rate limiting (every service throttles requests per client IP, with tighter windows on login/register/forgot, payment checkout/verify, and the AI/upload endpoints) and cache-aside reads (job listings, job details, company details, and user profiles), invalidated whenever the underlying data changes.
+Redis serves three purposes here: rate limiting (every service, including the gateway, throttles requests per client IP, with tighter windows on login/register/forgot, payment checkout/verify, and the AI/upload endpoints), cache-aside reads (job listings, job details, company details, and user profiles, invalidated on writes), and auth state (refresh token storage and access/refresh token revocation on logout).
 
 ### Workflow Overview
 
@@ -66,6 +74,7 @@ Redis serves two purposes here: rate limiting (every service throttles requests 
 sequenceDiagram
   participant User as User / Recruiter
   participant Frontend as Next.js Frontend
+  participant Gateway as API Gateway
   participant Auth as Auth Service
   participant UserSvc as User Service
   participant JobSvc as Job Service
@@ -73,12 +82,18 @@ sequenceDiagram
   participant PaySvc as Payment Service
 
   User->>Frontend: Sign in / browse jobs / manage profile
-  Frontend->>Auth: POST /api/auth/login or /register
-  Auth-->>Frontend: JWT token + account response
-  Frontend->>UserSvc: GET /api/user/me with token
-  Frontend->>JobSvc: Search, view, apply, or manage jobs
-  Frontend->>UtilSvc: Upload files or request AI career / resume analysis
-  Frontend->>PaySvc: Create checkout and verify payment
+  Frontend->>Gateway: POST /api/auth/login or /register
+  Gateway->>Auth: proxied request
+  Auth-->>Frontend: access token + refresh token + account response
+  Frontend->>Gateway: GET /api/user/me with access token
+  Gateway->>UserSvc: proxied request
+  Frontend->>Gateway: Search, view, apply, or manage jobs
+  Gateway->>JobSvc: proxied request
+  Frontend->>Gateway: Upload files or request AI career / resume analysis
+  Gateway->>UtilSvc: proxied request
+  Frontend->>Gateway: Create checkout and verify payment
+  Gateway->>PaySvc: proxied request
+  Note over Frontend,Gateway: On a 401, the frontend calls /api/auth/refresh once and retries automatically
 ```
 
 ## Tech Stack
@@ -87,12 +102,16 @@ sequenceDiagram
 | --- | --- |
 | Frontend | Next.js 16, React 19, TypeScript, Tailwind CSS 4 |
 | UI Primitives | Radix UI, Lucide React, next-themes, react-hot-toast |
-| HTTP Client | Axios |
-| Auth | JWT, cookies |
-| Backend | Node.js, Express 5, TypeScript |
+| HTTP Client | Axios (with an automatic refresh-token interceptor) |
+| Auth | JWT access + refresh tokens, Redis-backed revocation, cookies |
+| Gateway | Express 5 + http-proxy-middleware |
+| Backend | Node.js, Express 5, TypeScript, npm workspaces |
+| Validation | Zod |
 | Database | Neon PostgreSQL |
 | Cache / Rate Limiting | Redis (cache-aside reads + sliding-window rate limiting) |
 | Messaging | Kafka / KafkaJS |
+| Observability | pino (structured logs), prom-client (`/metrics`), `/health` checks |
+| Testing / CI | Vitest, GitHub Actions |
 | File Storage | Cloudinary |
 | Payments | Razorpay |
 | AI Services | Google Gemini |
@@ -106,18 +125,27 @@ job-portal/
 │   ├── src/
 │   │   ├── app/               # App Router pages and routes
 │   │   ├── components/        # Shared UI and feature components
-│   │   ├── context/           # Global app state and service URLs
-│   │   ├── lib/               # Shared utilities
+│   │   ├── context/           # Global app state, service URLs, refresh-token interceptor
+│   │   ├── lib/                # Shared utilities
 │   │   └── type.ts            # Shared TypeScript types
-│   ├── public/                # Static assets
+│   ├── public/                 # Static assets
 │   └── package.json
+├── packages/
+│   └── common/                 # @hireheaven/common — shared across every service
+│       └── src/                # ErrorHandler, TryCatch, redis client, rate limiter,
+│                                # cache, zod validate middleware, logger, metrics,
+│                                # health check, role guard, access/refresh tokens
 ├── services/
-│   ├── auth/                  # Authentication microservice
-│   ├── job/                   # Job and company microservice
-│   ├── payment/               # Razorpay payment microservice
-│   ├── user/                  # Profile, skills, and application microservice
-│   └── utils/                 # AI, uploads, and notification utilities
-└── README.md
+│   ├── gateway/                 # API gateway — single origin for the frontend
+│   ├── auth/                    # Authentication microservice
+│   ├── job/                     # Job and company microservice
+│   ├── payment/                 # Razorpay payment microservice
+│   ├── user/                    # Profile, skills, and application microservice
+│   └── utils/                   # AI, uploads, and notification utilities
+├── .github/workflows/ci.yml     # Typecheck + build + test every workspace
+├── Dockerfile.service           # Shared Dockerfile for every backend service + gateway
+├── docker-compose.yml           # One-command local stack
+└── package.json                 # npm workspaces root
 ```
 
 ## Installation Guide
@@ -136,30 +164,31 @@ job-portal/
 
 ### Quick Start (Docker Compose)
 
-The fastest way to get Redis, Kafka, and all five backend services (plus the frontend) running together:
+The fastest way to get Redis, Kafka, the gateway, all five backend services, and the frontend running together:
 
 ```bash
 docker compose up --build
 ```
 
-This starts Redis and Kafka/Zookeeper first, then builds and runs `auth` (5000), `utils` (5001), `user` (5002), `job` (5003), `payment` (5004), and the `frontend` (3000). Each service still reads its own `.env` file for the values Docker Compose doesn't override (`DB_URL`, `JWT_SEC`, Cloudinary, Razorpay, and Gemini credentials) — see below.
+This starts Redis and Kafka/Zookeeper first, then builds and runs `auth` (5000), `utils` (5001), `user` (5002), `job` (5003), `payment` (5004), the `gateway` (8080), and the `frontend` (3000). The frontend and every service talk to each other through the gateway/Docker's internal network; only the gateway and frontend ports need to be reached from your browser. Each service still reads its own `.env` file for the values Docker Compose doesn't override (`DB_URL`, `JWT_SEC`, Cloudinary, Razorpay, and Gemini credentials) — see below.
 
 ### Manual Setup
 
 1. Clone the repository.
-2. Install dependencies for each app:
+2. Install all workspace dependencies from the repo root (this installs the frontend, the gateway, all five services, and `@hireheaven/common` in one pass, and symlinks the shared package):
 
 ```bash
-cd frontend && npm install
-cd ../services/auth && npm install
-cd ../job && npm install
-cd ../payment && npm install
-cd ../user && npm install
-cd ../utils && npm install
+npm install
 ```
 
-3. Each service already ships a `.env` file pre-filled with working local defaults for `PORT`, `JWT_SEC` (shared across auth/job/payment/user so tokens verify across services), `Redis_url` (`redis://localhost:6379`), and `Kafka_Broker` (`localhost:9092`). You only need to fill in the real, account-specific values: `DB_URL` (Neon), Cloudinary keys, `Razorpay_Key`/`Razorpay_Secret`, and `API_KEY_GEMINI`. **Treat these `.env` files as local-development convenience only — rotate every secret before using this project anywhere public, and never commit real production credentials.**
-4. Start Redis and Kafka yourself (or via `docker compose up redis zookeeper kafka`) if you're running services with `npm run dev` instead of Docker Compose.
+3. Build the shared package once before running any service in dev mode (their `npm run dev` scripts assume `@hireheaven/common`'s `dist/` already exists):
+
+```bash
+npm run build --workspace=@hireheaven/common
+```
+
+4. Each service already ships a `.env` file pre-filled with working local defaults for `PORT`, `JWT_SEC` (shared across auth/job/payment/user so tokens verify across services), `Redis_url` (`redis://localhost:6379`), and `Kafka_Broker` (`localhost:9092`). You only need to fill in the real, account-specific values: `DB_URL` (Neon), Cloudinary keys, `Razorpay_Key`/`Razorpay_Secret`, and `API_KEY_GEMINI`. **Treat these `.env` files as local-development convenience only — rotate every secret before using this project anywhere public, and never commit real production credentials.**
+5. Start Redis and Kafka yourself (or via `docker compose up redis zookeeper kafka`) if you're running services with `npm run dev` instead of Docker Compose.
 
 ## Environment Variables
 
@@ -221,23 +250,39 @@ API_KEY_GEMINI=your_gemini_api_key
 Redis_url=redis://localhost:6379
 ```
 
-### Frontend Configuration (`frontend/.env`)
+### Gateway (`services/gateway`)
 
-The frontend reads its backend base URLs from environment variables (see `frontend/src/context/AppContext.tsx`), defaulting to `localhost` if unset:
+The gateway has no `.env` file committed (it holds no secrets) — configure it via environment variables, all optional with sane local defaults:
 
 ```env
-NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:5000
-NEXT_PUBLIC_UTILS_SERVICE_URL=http://localhost:5001
-NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:5002
-NEXT_PUBLIC_JOB_SERVICE_URL=http://localhost:5003
-NEXT_PUBLIC_PAYMENT_SERVICE_URL=http://localhost:5004
+PORT=8080
+Redis_url=redis://localhost:6379
+AUTH_SERVICE_URL=http://localhost:5000
+UTILS_SERVICE_URL=http://localhost:5001
+USER_SERVICE_URL=http://localhost:5002
+JOB_SERVICE_URL=http://localhost:5003
+PAYMENT_SERVICE_URL=http://localhost:5004
 ```
 
-For a deployed environment, point these at your deployed service URLs instead.
+### Frontend Configuration (`frontend/.env`)
+
+The frontend talks to the gateway by default. Set an individual `NEXT_PUBLIC_*_SERVICE_URL` only if you want to bypass the gateway and hit one service directly (e.g. while debugging):
+
+```env
+NEXT_PUBLIC_API_GATEWAY_URL=http://localhost:8080
+
+# NEXT_PUBLIC_AUTH_SERVICE_URL=http://localhost:5000
+# NEXT_PUBLIC_UTILS_SERVICE_URL=http://localhost:5001
+# NEXT_PUBLIC_USER_SERVICE_URL=http://localhost:5002
+# NEXT_PUBLIC_JOB_SERVICE_URL=http://localhost:5003
+# NEXT_PUBLIC_PAYMENT_SERVICE_URL=http://localhost:5004
+```
+
+For a deployed environment, point `NEXT_PUBLIC_API_GATEWAY_URL` at your deployed gateway URL.
 
 ## Running the Project
 
-Each service can be started independently.
+Each service can be started independently. Build `@hireheaven/common` first (step 3 in Manual Setup above) — every service imports it.
 
 ### Frontend
 
@@ -246,9 +291,10 @@ cd frontend
 npm run dev
 ```
 
-### Backend Services
+### Backend Services + Gateway
 
 ```bash
+cd services/gateway && npm run dev
 cd services/auth && npm run dev
 cd services/job && npm run dev
 cd services/payment && npm run dev
@@ -258,34 +304,50 @@ cd services/utils && npm run dev
 
 ### Production Build
 
+From the repo root, this builds `@hireheaven/common` and every workspace that has a `build` script (all five services, the gateway, and the frontend):
+
 ```bash
-cd frontend && npm run build && npm run start
-cd services/auth && npm run build && npm run start
-cd services/job && npm run build && npm run start
-cd services/payment && npm run build && npm run start
-cd services/user && npm run build && npm run start
-cd services/utils && npm run build && npm run start
+npm run build --workspaces --if-present
 ```
+
+Then start each with `npm start` from its own directory (or `node dist/index.js` for the backend services/gateway, `npm start` for the frontend).
+
+## Testing & CI
+
+Every workspace (the shared package, all five services, and the gateway) has a Vitest suite covering validation schemas, rate limiting, caching, token issuance/revocation, and role guards — using an in-memory fake Redis client, so tests run without any real infrastructure.
+
+```bash
+npm run typecheck --workspaces --if-present   # tsc --noEmit everywhere
+npm run build --workspaces --if-present       # compile everything, including the frontend
+npm run test --workspaces --if-present        # run every Vitest suite
+```
+
+`.github/workflows/ci.yml` runs the same three commands (in that order, since services depend on `@hireheaven/common`'s build output) on every push and pull request to `main`.
 
 ## Deployment
 
-Every service and the frontend already has its own `Dockerfile`, so each can be deployed independently as a container:
+Every backend service and the gateway share `Dockerfile.service` at the repo root (the build context is the repo root, not the individual service folder, since they all depend on the `@hireheaven/common` workspace package); the frontend keeps its own self-contained `Dockerfile`.
 
-- **Frontend**: deploy to Vercel (native Next.js support) or as the `frontend` container to any Docker host; set the `NEXT_PUBLIC_*_SERVICE_URL` variables to your deployed backend URLs.
-- **Backend services**: deploy each (`auth`, `user`, `job`, `payment`, `utils`) as a separate container to Render, Railway, Fly.io, or any container platform. Set each service's environment variables (from the tables above) in that platform's dashboard/secrets manager rather than committing real values.
-- **Redis**: use a managed instance (Upstash, Redis Cloud, or your platform's managed Redis add-on) and point `Redis_url` at it.
+- **Frontend**: deploy to Vercel (native Next.js support) or as the `frontend` container to any Docker host; set `NEXT_PUBLIC_API_GATEWAY_URL` to your deployed gateway's URL.
+- **Gateway**: deploy as its own container (`docker build -f Dockerfile.service --build-arg SERVICE=gateway .`) to Render, Railway, Fly.io, or any container platform. Set `AUTH_SERVICE_URL`, `UTILS_SERVICE_URL`, `USER_SERVICE_URL`, `JOB_SERVICE_URL`, and `PAYMENT_SERVICE_URL` to each service's deployed URL, and `Redis_url` to your managed Redis instance.
+- **Backend services**: deploy each (`auth`, `user`, `job`, `payment`, `utils`) as its own container the same way (`--build-arg SERVICE=<name>`). Set each service's environment variables (from the tables above) in that platform's dashboard/secrets manager rather than committing real values.
+- **Redis**: use a managed instance (Upstash, Redis Cloud, or your platform's managed Redis add-on) and point every service's `Redis_url` at it — it's shared state for rate limiting, caching, and auth token revocation, so all services must point at the same instance.
 - **Kafka**: use a managed instance (Upstash Kafka, Confluent Cloud) and point `Kafka_Broker` at it. All Kafka calls are wrapped in try/catch and log-and-continue on failure, so the app still runs (without async email/notification delivery) if Kafka is unreachable.
 - **Database**: Neon PostgreSQL is already serverless and requires no separate hosting — just use your project's connection string as `DB_URL` in each deployed service.
 - `docker-compose.yml` at the repo root is intended for local development; for production, run each service as its own deployment so they can scale and fail independently, which is the point of a microservices architecture.
 
 ## API Endpoints
 
+All endpoints below are reachable through the gateway at its own origin (default `http://localhost:8080`) using the same paths, e.g. `http://localhost:8080/api/auth/login`.
+
 ### Auth Service
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | POST | `/api/auth/register` | Register a user with profile upload support |
-| POST | `/api/auth/login` | Authenticate and issue a token |
+| POST | `/api/auth/login` | Authenticate and issue an access + refresh token pair |
+| POST | `/api/auth/refresh` | Exchange a refresh token for a new access + refresh token pair (rotates the refresh token) |
+| POST | `/api/auth/logout` | Revoke the current access token and refresh token |
 | POST | `/api/auth/forgot` | Start password reset flow |
 | POST | `/api/auth/reset/:token` | Complete password reset |
 
@@ -294,29 +356,32 @@ Every service and the frontend already has its own `Dockerfile`, so each can be 
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | GET | `/api/user/me` | Get the authenticated user profile |
-| GET | `/api/user/:userId` | Get public user details |
+| GET | `/api/user/admin/users` | **Admin only.** List all users, paginated |
+| GET | `/api/user/:userId` | Get public user details (cached) |
 | PUT | `/api/user/update/profile` | Update basic profile fields |
 | PUT | `/api/user/update/pic` | Update profile image |
 | PUT | `/api/user/update/resume` | Update resume file |
 | POST | `/api/user/skill/add` | Add a skill |
 | PUT | `/api/user/skill/delete` | Remove a skill |
 | POST | `/api/user/apply/job` | Apply for a job |
-| GET | `/api/user/application/all` | List user applications |
+| GET | `/api/user/application/all` | List the current user's applications, paginated |
 
 ### Job Service
 
 | Method | Endpoint | Description |
 | --- | --- | --- |
+| GET | `/api/job/admin/jobs` | **Admin only.** List every job (active and inactive), paginated |
+| PUT | `/api/job/admin/jobs/:jobId/active` | **Admin only.** Activate or deactivate any job |
 | POST | `/api/job/company/new` | Create a new company |
-| DELETE | `/api/job/company/:companyId` | Delete a company |
+| DELETE | `/api/job/company/:companyId` | Delete a company (owner or admin) |
 | GET | `/api/job/company/all` | List recruiter companies |
-| GET | `/api/job/company/:id` | Get company details |
+| GET | `/api/job/company/:id` | Get company details (cached) |
 | POST | `/api/job/new` | Create a job posting |
-| PUT | `/api/job/:jobId` | Update a job posting |
-| GET | `/api/job/all` | Get all active jobs |
-| GET | `/api/job/:jobId` | Get a single job |
-| GET | `/api/job/application/:jobId` | Get applications for a job |
-| PUT | `/api/job/application/update/:id` | Update an application status |
+| PUT | `/api/job/:jobId` | Update a job posting (owner or admin) |
+| GET | `/api/job/all` | Get active jobs, paginated and filterable by title/location (cached) |
+| GET | `/api/job/:jobId` | Get a single job (cached) |
+| GET | `/api/job/application/:jobId` | Get applications for a job, paginated (owner or admin) |
+| PUT | `/api/job/application/update/:id` | Update an application status (owner or admin) |
 
 ### Payment Service
 
@@ -332,6 +397,15 @@ Every service and the frontend already has its own `Dockerfile`, so each can be 
 | POST | `/api/utils/upload` | Upload or replace media in Cloudinary |
 | POST | `/api/utils/career` | Generate career guidance using Gemini |
 | POST | `/api/utils/resume-analyser` | Analyze a resume for ATS compatibility |
+
+### Operational Endpoints
+
+Every service (including the gateway) exposes:
+
+| Method | Endpoint | Description |
+| --- | --- | --- |
+| GET | `/health` | Liveness check — service name + timestamp |
+| GET | `/metrics` | Prometheus-format metrics (request duration histogram + default Node process metrics) |
 
 ## Screenshots
 
@@ -357,41 +431,42 @@ Every service and the frontend already has its own `Dockerfile`, so each can be 
 
 ## Future Improvements
 
-- Add centralized API gateway and service discovery instead of the frontend calling each service directly.
-- Introduce automated tests (unit + integration) for frontend and backend services — currently none exist.
 - Add Kubernetes manifests / Helm chart for production orchestration beyond the local Docker Compose setup.
-- Improve observability with structured logging, request tracing, and metrics (e.g. OpenTelemetry + Prometheus/Grafana).
-- Add pagination, sorting, and advanced filters for the job search flow.
-- Add admin moderation for companies, job posts, and suspicious applications.
+- Add distributed tracing (e.g. OpenTelemetry) across the gateway and services, correlated by request ID.
+- Build a frontend admin dashboard on top of the existing admin API endpoints (currently API-only).
+- Add sorting and advanced filters (salary range, job type, work location) to the job search flow.
 - Move `.env` files out of version control (use `.env.example` + a secrets manager) once this project is used for anything beyond local evaluation.
-- Add a shared internal package (or npm workspace) for the duplicated `TryCatch`/`ErrorHandler`/`redisClient`/`rateLimiter` utilities instead of copy-pasting them into every service.
-- Add CI (lint, typecheck, build, test) via GitHub Actions on every push/PR.
+- Add end-to-end tests (Playwright/Cypress) covering the full signup → apply → payment flow through the gateway.
+- Add token-bucket or per-user (not just per-IP) rate limiting for authenticated endpoints.
 
 ## Challenges Solved
 
 - Coordinating a multi-service architecture without losing feature cohesion.
-- Keeping recruiter and job seeker flows separate while sharing a common UX.
-- Managing authenticated requests across services with token-based access.
+- Keeping recruiter, job seeker, and admin flows separate while sharing a common UX and auth model.
+- Managing authenticated requests across services with short-lived access tokens, refresh rotation, and Redis-backed revocation.
+- Fronting five independently deployable services with a single gateway without breaking existing route contracts.
+- Sharing code (error handling, Redis, validation, logging, metrics, tokens) across services via an npm workspaces package instead of copy-pasting it five times.
 - Handling binary uploads for resumes, logos, and profile media.
 - Returning structured JSON from AI models reliably enough for UI rendering.
 - Integrating payment, messaging, storage, and AI systems into one workflow.
 
 ## Learning Outcomes
 
-- Microservices design and service boundary definition.
-- Frontend state orchestration with React context.
-- Secure auth flows using JWT and cookie-based sessions.
-- Database modeling for job portals, applications, and user skills.
+- Microservices design, service boundary definition, and API gateway patterns.
+- Access/refresh token authentication with server-side revocation, and role-based authorization (jobseeker/recruiter/admin).
+- Frontend state orchestration with React context, including a transparent token-refresh interceptor.
+- Database modeling for job portals, applications, and user skills, including a zero-downtime enum migration (adding the `admin` role).
 - Practical integration of third-party APIs and hosted services.
-- Real-world TypeScript patterns across frontend and backend codebases.
+- Testable Node.js services: dependency-injectable Redis clients, pure validation schemas, and fast unit tests with no live infrastructure.
+- Real-world TypeScript patterns across a monorepo, frontend and backend alike.
 
 ## Why This Project Stands Out
 
-- It combines a polished consumer-facing frontend with a production-style distributed backend.
-- It solves a real hiring workflow end to end, from discovery to application to payment.
+- It combines a polished consumer-facing frontend with a production-style distributed backend, including a gateway, observability, and CI.
+- It solves a real hiring workflow end to end, from discovery to application to payment, with admin moderation on top.
 - It adds AI features that are useful rather than ornamental: resume analysis and career guidance.
-- It demonstrates integration depth across databases, storage, caching, messaging, and payments.
-- It is recruiter-friendly because the domain, architecture, and feature scope are immediately understandable.
+- It demonstrates integration depth across databases, storage, caching, messaging, payments, and authentication.
+- It is recruiter-friendly because the domain, architecture, and feature scope are immediately understandable — and it holds up under scrutiny: tests pass, builds are clean, and the deployment story is documented.
 
 ## License
 

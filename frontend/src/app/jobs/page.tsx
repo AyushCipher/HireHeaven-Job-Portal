@@ -35,6 +35,9 @@ const JobsPage = () => {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [title, setTitle] = useState("");
   const [location, setLocation] = useState("");
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
 
   const token = Cookies.get("token");
   const ref = useRef<HTMLButtonElement>(null);
@@ -43,7 +46,7 @@ const JobsPage = () => {
     setLoading(true);
     try {
       const { data } = await axios.get(
-        `${job_service}/api/job/all?title=${title}&location=${location}`,
+        `${job_service}/api/job/all?title=${title}&location=${location}&page=${page}&limit=12`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -51,7 +54,9 @@ const JobsPage = () => {
         }
       );
 
-      setJobs(data);
+      setJobs(data.data);
+      setTotalPages(data.pagination.totalPages);
+      setTotal(data.pagination.total);
     } catch (error) {
       console.log(error);
     } finally {
@@ -61,6 +66,10 @@ const JobsPage = () => {
 
   useEffect(() => {
     fetchJobs();
+  }, [title, location, page]);
+
+  useEffect(() => {
+    setPage(1);
   }, [title, location]);
 
   const clickEvent = () => {
@@ -70,7 +79,7 @@ const JobsPage = () => {
   const clearFilter = () => {
     setTitle("");
     setLocation("");
-    fetchJobs();
+    setPage(1);
     ref.current?.click();
   };
 
@@ -85,7 +94,7 @@ const JobsPage = () => {
               <h1 className="text-3xl md:text-4xl font-bold mb-2">
                 Explore <span className="text-red-500">Oppertunities</span>
               </h1>
-              <p className="text-base opacity-70">{jobs.length} jobs</p>
+              <p className="text-base opacity-70">{total} jobs</p>
             </div>
 
             <Button className="gap-2 h-11" onClick={clickEvent}>
@@ -145,6 +154,28 @@ const JobsPage = () => {
                     <Briefcase size={40} className="opacity-40" />
                   </div>
                   <h3 className="text-xl font-semibold mb-2">No Jobs found</h3>
+                </div>
+              )}
+
+              {jobs && jobs.length > 0 && totalPages > 1 && (
+                <div className="flex items-center justify-center gap-4 mb-8">
+                  <Button
+                    variant={"outline"}
+                    disabled={page <= 1}
+                    onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm opacity-70">
+                    Page {page} of {totalPages}
+                  </span>
+                  <Button
+                    variant={"outline"}
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
+                  >
+                    Next
+                  </Button>
                 </div>
               )}
             </>

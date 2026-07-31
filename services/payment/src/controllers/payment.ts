@@ -1,6 +1,5 @@
-import { TryCatch } from "../utils/TryCatch.js";
+import { ErrorHandler, TryCatch } from "@hireheaven/common";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
-import ErrorHandler from "../utils/errorHandler.js";
 import { sql } from "../utils/db.js";
 import { instance } from "../index.js";
 import crypto from "crypto";

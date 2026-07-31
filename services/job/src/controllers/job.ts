@@ -2,11 +2,12 @@ import axios from "axios";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import getBuffer from "../utils/buffer.js";
 import { sql } from "../utils/db.js";
-import ErrorHandler from "../utils/errorHandler.js";
-import { TryCatch } from "../utils/TryCatch.js";
+import { ErrorHandler, TryCatch } from "@hireheaven/common";
 import { applicationStatusUpdateTemplate } from "../tempelete.js";
 import { publishToTopic } from "../producer.js";
-import { getCache, invalidateByPrefix, setCache } from "../utils/cache.js";
+import { cache } from "../utils/redisClient.js";
+
+const { getCache, setCache, invalidateByPrefix } = cache;
 
 const JOB_LIST_CACHE_PREFIX = "cache:job:all:";
 const JOB_SINGLE_CACHE_PREFIX = "cache:job:single:";
@@ -77,12 +78,16 @@ export const deleteCompany = TryCatch(
     const { companyId } = req.params;
 
     const [company] =
-      await sql`SELECT logo_public_id FROM companies WHERE company_id = ${companyId} AND recruiter_id = ${user?.user_id}`;
+      await sql`SELECT logo_public_id, recruiter_id FROM companies WHERE company_id = ${companyId}`;
 
     if (!company) {
+      throw new ErrorHandler(404, "Company not found");
+    }
+
+    if (company.recruiter_id !== user?.user_id && user?.role !== "admin") {
       throw new ErrorHandler(
-        404,
-        "Company not found or you're not authorized to delete it."
+        403,
+        "You're not authorized to delete this company"
       );
     }
 
@@ -158,7 +163,7 @@ export const updateJob = TryCatch(async (req: AuthenticatedRequest, res) => {
     throw new ErrorHandler(401, "Authentication required");
   }
 
-  if (user.role !== "recruiter") {
+  if (user.role !== "recruiter" && user.role !== "admin") {
     throw new ErrorHandler(
       403,
       "Forbidden: Only recruiter can create a company"
@@ -185,7 +190,10 @@ export const updateJob = TryCatch(async (req: AuthenticatedRequest, res) => {
     throw new ErrorHandler(404, "Job not found");
   }
 
-  if (existingJob.posted_by_recuriter_id !== user.user_id) {
+  if (
+    existingJob.posted_by_recuriter_id !== user.user_id &&
+    user.role !== "admin"
+  ) {
     throw new ErrorHandler(403, "Forbiden: You are not allowed");
   }
 
@@ -257,12 +265,14 @@ export const getCompanyDetails = TryCatch(
 );
 
 export const getAllActiveJobs = TryCatch(async (req, res) => {
-  const { title, location } = req.query as {
+  const { title, location, page, limit } = res.locals.validated.query as {
     title?: string;
     location?: string;
+    page: number;
+    limit: number;
   };
 
-  const cacheKey = `${JOB_LIST_CACHE_PREFIX}${title || ""}:${location || ""}`;
+  const cacheKey = `${JOB_LIST_CACHE_PREFIX}${title || ""}:${location || ""}:${page}:${limit}`;
 
   const cached = await getCache(cacheKey);
 
@@ -270,31 +280,52 @@ export const getAllActiveJobs = TryCatch(async (req, res) => {
     return res.json(cached);
   }
 
-  let querySting = `SELECT j.job_id, j.title, j.description, j.salary, j.location, j.job_type, j.role, j.work_location, j.created_at, c.name AS company_name, c.logo AS company_logo, c.company_id AS company_id FROM jobs j JOIN companies c ON j.company_id = c.company_id WHERE j.is_active = true`;
+  let whereClause = ` FROM jobs j JOIN companies c ON j.company_id = c.company_id WHERE j.is_active = true`;
 
-  const values = [];
+  const values: any[] = [];
 
   let paramIndex = 1;
 
   if (title) {
-    querySting += ` AND j.title ILIKE $${paramIndex}`;
+    whereClause += ` AND j.title ILIKE $${paramIndex}`;
     values.push(`%${title}%`);
     paramIndex++;
   }
 
   if (location) {
-    querySting += ` AND j.location ILIKE $${paramIndex}`;
+    whereClause += ` AND j.location ILIKE $${paramIndex}`;
     values.push(`%${location}%`);
     paramIndex++;
   }
 
-  querySting += " ORDER BY j.created_at DESC";
+  const countQuery = `SELECT COUNT(*)::int AS total${whereClause}`;
+  const [{ total }] = (await sql.query(countQuery, values)) as {
+    total: number;
+  }[];
 
-  const jobs = (await sql.query(querySting, values)) as any[];
+  const dataQuery = `SELECT j.job_id, j.title, j.description, j.salary, j.location, j.job_type, j.role, j.work_location, j.created_at, c.name AS company_name, c.logo AS company_logo, c.company_id AS company_id${whereClause} ORDER BY j.created_at DESC LIMIT $${paramIndex} OFFSET $${
+    paramIndex + 1
+  }`;
 
-  await setCache(cacheKey, jobs, 60);
+  const jobs = (await sql.query(dataQuery, [
+    ...values,
+    limit,
+    (page - 1) * limit,
+  ])) as any[];
 
-  res.json(jobs);
+  const result = {
+    data: jobs,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    },
+  };
+
+  await setCache(cacheKey, result, 60);
+
+  res.json(result);
 });
 
 export const getSingleJob = TryCatch(async (req, res) => {
@@ -322,7 +353,7 @@ export const getAllApplicationForJob = TryCatch(
       throw new ErrorHandler(401, "Authentication required");
     }
 
-    if (user.role !== "recruiter") {
+    if (user.role !== "recruiter" && user.role !== "admin") {
       throw new ErrorHandler(403, "Forbidden: Only recruiter can access this");
     }
 
@@ -336,16 +367,84 @@ export const getAllApplicationForJob = TryCatch(
       throw new ErrorHandler(404, "job not found");
     }
 
-    if (job.posted_by_recuriter_id !== user.user_id) {
+    if (job.posted_by_recuriter_id !== user.user_id && user.role !== "admin") {
       throw new ErrorHandler(403, "Forbidden you are not allowed");
     }
 
-    const applications =
-      await sql`SELECT * FROM applications WHERE job_id = ${jobId} ORDER BY subscribed DESC, applied_at ASC`;
+    const { page, limit } = res.locals.validated.query as {
+      page: number;
+      limit: number;
+    };
 
-    res.json(applications);
+    const [{ total }] = (await sql`
+      SELECT COUNT(*)::int AS total FROM applications WHERE job_id = ${jobId}
+    `) as { total: number }[];
+
+    const applications = await sql`
+      SELECT * FROM applications WHERE job_id = ${jobId}
+      ORDER BY subscribed DESC, applied_at ASC
+      LIMIT ${limit} OFFSET ${(page - 1) * limit}
+    `;
+
+    res.json({
+      data: applications,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      },
+    });
   }
 );
+
+export const adminListAllJobs = TryCatch(async (req, res) => {
+  const { page, limit } = res.locals.validated.query as {
+    page: number;
+    limit: number;
+  };
+
+  const [{ total }] = (await sql`
+    SELECT COUNT(*)::int AS total FROM jobs
+  `) as { total: number }[];
+
+  const jobs = await sql`
+    SELECT j.*, c.name AS company_name, c.recruiter_id
+    FROM jobs j JOIN companies c ON j.company_id = c.company_id
+    ORDER BY j.created_at DESC
+    LIMIT ${limit} OFFSET ${(page - 1) * limit}
+  `;
+
+  res.json({
+    data: jobs,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    },
+  });
+});
+
+export const adminSetJobActive = TryCatch(async (req, res) => {
+  const { jobId } = req.params;
+  const { is_active } = req.body;
+
+  const [job] =
+    await sql`UPDATE jobs SET is_active = ${is_active} WHERE job_id = ${jobId} RETURNING *`;
+
+  if (!job) {
+    throw new ErrorHandler(404, "Job not found");
+  }
+
+  await Promise.all([
+    invalidateByPrefix(JOB_LIST_CACHE_PREFIX),
+    invalidateByPrefix(`${JOB_SINGLE_CACHE_PREFIX}${jobId}`),
+    invalidateByPrefix(`${COMPANY_CACHE_PREFIX}${job.company_id}`),
+  ]);
+
+  res.json({ message: "Job moderation status updated", job });
+});
 
 export const updateApplication = TryCatch(
   async (req: AuthenticatedRequest, res) => {
@@ -355,7 +454,7 @@ export const updateApplication = TryCatch(
       throw new ErrorHandler(401, "Authentication required");
     }
 
-    if (user.role !== "recruiter") {
+    if (user.role !== "recruiter" && user.role !== "admin") {
       throw new ErrorHandler(403, "Forbidden: Only recruiter can access this");
     }
 
@@ -375,7 +474,7 @@ export const updateApplication = TryCatch(
       throw new ErrorHandler(404, "no job with this id");
     }
 
-    if (job.posted_by_recuriter_id !== user.user_id) {
+    if (job.posted_by_recuriter_id !== user.user_id && user.role !== "admin") {
       throw new ErrorHandler(403, "Forbidden you are not allowed");
     }
 

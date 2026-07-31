@@ -65,7 +65,7 @@ const JobPage = () => {
   async function fetchJobApplications() {
     try {
       const { data } = await axios.get(
-        `${job_service}/api/job/application/${id}`,
+        `${job_service}/api/job/application/${id}?limit=100`,
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -73,7 +73,7 @@ const JobPage = () => {
         }
       );
 
-      setJobApplications(data);
+      setJobApplications(data.data);
     } catch (error) {
       console.log(error);
     }

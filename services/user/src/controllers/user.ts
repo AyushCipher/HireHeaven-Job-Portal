@@ -2,12 +2,41 @@ import axios from "axios";
 import { AuthenticatedRequest } from "../middlewares/auth.js";
 import getBuffer from "../utils/buffer.js";
 import { sql } from "../utils/db.js";
-import ErrorHandler from "../utils/errorHandler.js";
-import { TryCatch } from "../utils/TryCatch.js";
-import { getCache, invalidateCache, setCache } from "../utils/cache.js";
+import { ErrorHandler, TryCatch } from "@hireheaven/common";
+import { cache } from "../utils/redisClient.js";
+
+const { getCache, setCache, invalidateKey: invalidateCache } = cache;
 
 const userProfileCacheKey = (userId: string | number) =>
   `cache:user:profile:${userId}`;
+
+export const adminListUsers = TryCatch(async (req, res) => {
+  const { page, limit } = res.locals.validated.query as {
+    page: number;
+    limit: number;
+  };
+
+  const [{ total }] = (await sql`
+    SELECT COUNT(*)::int AS total FROM users
+  `) as { total: number }[];
+
+  const users = await sql`
+    SELECT user_id, name, email, phone_number, role, created_at, subscription
+    FROM users
+    ORDER BY created_at DESC
+    LIMIT ${limit} OFFSET ${(page - 1) * limit}
+  `;
+
+  res.json({
+    data: users,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    },
+  });
+});
 
 export const myProfile = TryCatch(
   async (req: AuthenticatedRequest, res, next) => {
@@ -312,10 +341,29 @@ export const applyForJob = TryCatch(async (req: AuthenticatedRequest, res) => {
 
 export const getAllaplications = TryCatch(
   async (req: AuthenticatedRequest, res) => {
+    const { page, limit } = res.locals.validated.query as {
+      page: number;
+      limit: number;
+    };
+
+    const [{ total }] = (await sql`
+      SELECT COUNT(*)::int AS total FROM applications WHERE applicant_id = ${req.user?.user_id}
+    `) as { total: number }[];
+
     const applications = await sql`
     SELECT a.*, j.title AS job_title, j.salary AS job_salary, j.location AS job_location FROM applications a JOIN jobs j ON a.job_id = j.job_id WHERE a.applicant_id = ${req.user?.user_id}
+    ORDER BY a.applied_at DESC
+    LIMIT ${limit} OFFSET ${(page - 1) * limit}
   `;
 
-    res.json(applications);
+    res.json({
+      data: applications,
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(Math.ceil(total / limit), 1),
+      },
+    });
   }
 );

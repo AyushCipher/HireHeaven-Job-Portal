@@ -1,7 +1,9 @@
 import express from "express";
 import { isAuth } from "../middlewares/auth.js";
 import { checkOut, paymentVerification } from "../controllers/payment.js";
-import { rateLimiter } from "../middlewares/rateLimiter.js";
+import { rateLimiter } from "../utils/redisClient.js";
+import { validate } from "@hireheaven/common";
+import { paymentVerificationSchema } from "../validators.js";
 
 const router = express.Router();
 
@@ -12,6 +14,12 @@ const paymentActionLimiter = rateLimiter({
 });
 
 router.post("/checkout", isAuth, paymentActionLimiter, checkOut);
-router.post("/verify", isAuth, paymentActionLimiter, paymentVerification);
+router.post(
+  "/verify",
+  isAuth,
+  paymentActionLimiter,
+  validate(paymentVerificationSchema),
+  paymentVerification
+);
 
 export default router;
