@@ -213,6 +213,7 @@ JWT_SEC=your_jwt_secret
 Kafka_Broker=localhost:9092
 KAFKA_USERNAME=
 KAFKA_PASSWORD=
+KAFKA_SASL_MECHANISM=scram-sha-256
 Frontend_Url=http://localhost:3000
 Redis_url=redis://localhost:6379
 ```
@@ -237,6 +238,7 @@ JWT_SEC=your_jwt_secret
 Kafka_Broker=localhost:9092
 KAFKA_USERNAME=
 KAFKA_PASSWORD=
+KAFKA_SASL_MECHANISM=scram-sha-256
 Redis_url=redis://localhost:6379
 ```
 
@@ -261,13 +263,14 @@ API_SECRET=your_cloudinary_api_secret
 Kafka_Broker=localhost:9092
 KAFKA_USERNAME=
 KAFKA_PASSWORD=
+KAFKA_SASL_MECHANISM=scram-sha-256
 SMTP_USER=your_smtp_email@gmail.com
 SMTP_PASS=your_smtp_app_password
 API_KEY_GEMINI=your_gemini_api_key
 Redis_url=redis://localhost:6379
 ```
 
-`KAFKA_USERNAME`/`KAFKA_PASSWORD` are only needed for a hosted broker that requires SASL_SSL auth (e.g. Upstash Kafka) — leave both blank for a local/plaintext broker (e.g. via `docker-compose`). `auth` and `job` publish to the `send-mail` topic (password resets, application status emails); `utils` consumes it and actually sends the mail via Nodemailer. If Kafka is unreachable or unconfigured, these two email notifications silently don't fire — everything else in the app is unaffected.
+`KAFKA_USERNAME`/`KAFKA_PASSWORD` are only needed for a hosted broker that requires SASL_SSL auth (e.g. Redpanda Serverless, Confluent Cloud) — leave both blank for a local/plaintext broker (e.g. via `docker-compose`). `KAFKA_SASL_MECHANISM` defaults to `scram-sha-256` but can be overridden (e.g. `scram-sha-512`, `plain`) to match whatever your broker requires. `auth` and `job` publish to the `send-mail` topic (password resets, application status emails); `utils` consumes it and actually sends the mail via Nodemailer. If Kafka is unreachable or unconfigured, these two email notifications silently don't fire — everything else in the app is unaffected.
 
 ### Gateway (`services/gateway`)
 
@@ -351,7 +354,7 @@ Every backend service and the gateway share `Dockerfile.service` at the repo roo
 - **Gateway**: deploy as its own container (`docker build -f Dockerfile.service --build-arg SERVICE=gateway .`) to Render, Railway, Fly.io, or any container platform. Set `AUTH_SERVICE_URL`, `UTILS_SERVICE_URL`, `USER_SERVICE_URL`, `JOB_SERVICE_URL`, and `PAYMENT_SERVICE_URL` to each service's deployed URL, and `Redis_url` to your managed Redis instance.
 - **Backend services**: deploy each (`auth`, `user`, `job`, `payment`, `utils`) as its own container the same way (`--build-arg SERVICE=<name>`). Set each service's environment variables (from the tables above) in that platform's dashboard/secrets manager rather than committing real values.
 - **Redis**: use a managed instance (Upstash, Redis Cloud, or your platform's managed Redis add-on) and point every service's `Redis_url` at it — it's shared state for rate limiting, caching, and auth token revocation, so all services must point at the same instance.
-- **Kafka**: use a managed instance (Upstash Kafka, Confluent Cloud) on `auth`, `job`, and `utils`, setting `Kafka_Broker` plus `KAFKA_USERNAME`/`KAFKA_PASSWORD` (hosted brokers require SASL_SSL auth). All Kafka calls are wrapped in try/catch and log-and-continue on failure, so the app still runs (without password-reset/application-status emails) if Kafka is unreachable or left unconfigured.
+- **Kafka**: use a Kafka-protocol-compatible managed instance (Redpanda Serverless, Confluent Cloud) on `auth`, `job`, and `utils`, setting `Kafka_Broker` plus `KAFKA_USERNAME`/`KAFKA_PASSWORD` (and `KAFKA_SASL_MECHANISM` if your provider doesn't use the `scram-sha-256` default). All Kafka calls are wrapped in try/catch and log-and-continue on failure, so the app still runs (without password-reset/application-status emails) if Kafka is unreachable or left unconfigured.
 - **Database**: Neon PostgreSQL is already serverless and requires no separate hosting — just use your project's connection string as `DB_URL` in each deployed service.
 - `docker-compose.yml` at the repo root is intended for local development; for production, run each service as its own deployment so they can scale and fail independently, which is the point of a microservices architecture.
 
