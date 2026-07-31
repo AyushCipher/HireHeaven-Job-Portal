@@ -17,7 +17,7 @@ The project was designed to demonstrate real-world engineering depth: authentica
 - JWT access + refresh token authentication with Redis-backed revocation (logout invalidates both tokens server-side).
 - Job browsing, searching, application tracking, and recruiter job posting, with paginated listings.
 - Company management for recruiter workflows.
-- Admin moderation endpoints: list/deactivate any job, list/remove any company, list all users.
+- Admin dashboard (`/admin`, role-gated) for moderation: list/deactivate any job, list/remove any company, list all users.
 - AI-powered resume ATS analysis and AI-powered career path recommendations.
 - Subscription and payment flow powered by Razorpay.
 - File upload support for resumes, profile photos, and company logos.
@@ -395,6 +395,7 @@ All endpoints below are reachable through the gateway at its own origin (default
 | --- | --- | --- |
 | GET | `/api/job/admin/jobs` | **Admin only.** List every job (active and inactive), paginated |
 | PUT | `/api/job/admin/jobs/:jobId/active` | **Admin only.** Activate or deactivate any job |
+| GET | `/api/job/admin/companies` | **Admin only.** List every company with its job count, paginated |
 | POST | `/api/job/company/new` | Create a new company |
 | DELETE | `/api/job/company/:companyId` | Delete a company (owner or admin) |
 | GET | `/api/job/company/all` | List recruiter companies |
@@ -456,7 +457,6 @@ Every service (including the gateway) exposes:
 
 - Add Kubernetes manifests / Helm chart for production orchestration beyond the local Docker Compose setup.
 - Add distributed tracing (e.g. OpenTelemetry) across the gateway and services, correlated by request ID.
-- Build a frontend admin dashboard on top of the existing admin API endpoints (currently API-only).
 - Add sorting and advanced filters (salary range, job type, work location) to the job search flow.
 - Use a proper secrets manager (e.g. your deployment platform's env var store, or Doppler/Vault) instead of local `.env` files as the project grows beyond a single deployer.
 - Add end-to-end tests (Playwright/Cypress) covering the full signup → apply → payment flow through the gateway.
