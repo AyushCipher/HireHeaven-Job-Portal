@@ -134,7 +134,8 @@ job-portal/
 │   └── common/                 # @hireheaven/common — shared across every service
 │       └── src/                # ErrorHandler, TryCatch, redis client, rate limiter,
 │                                # cache, zod validate middleware, logger, metrics,
-│                                # health check, role guard, access/refresh tokens
+│                                # health check, role guard, access/refresh tokens,
+│                                # Kafka client (SASL_SSL-aware)
 ├── services/
 │   ├── gateway/                 # API gateway — single origin for the frontend
 │   ├── auth/                    # Authentication microservice
@@ -157,7 +158,7 @@ job-portal/
 - Docker + Docker Compose (only needed if you want Redis/Kafka running locally via the provided `docker-compose.yml`)
 - Neon PostgreSQL database (free tier works — the services use `@neondatabase/serverless`, which speaks Neon's HTTP protocol, so a generic local Postgres container will not work as a drop-in replacement)
 - Redis instance (local via Docker Compose, or a hosted instance such as Upstash/Redis Cloud)
-- Kafka broker (local via Docker Compose, or a hosted instance such as Upstash Kafka/Confluent Cloud)
+- Kafka broker (local via Docker Compose, or a Kafka-protocol-compatible hosted instance such as Redpanda Serverless/Confluent Cloud)
 - Cloudinary account
 - Razorpay account
 - Google Gemini API key
