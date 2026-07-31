@@ -426,6 +426,35 @@ export const adminListAllJobs = TryCatch(async (req, res) => {
   });
 });
 
+export const adminListAllCompanies = TryCatch(async (req, res) => {
+  const { page, limit } = res.locals.validated.query as {
+    page: number;
+    limit: number;
+  };
+
+  const [{ total }] = (await sql`
+    SELECT COUNT(*)::int AS total FROM companies
+  `) as { total: number }[];
+
+  const companies = await sql`
+    SELECT company_id, name, description, website, logo, recruiter_id, created_at,
+      (SELECT COUNT(*)::int FROM jobs j WHERE j.company_id = c.company_id) AS job_count
+    FROM companies c
+    ORDER BY created_at DESC
+    LIMIT ${limit} OFFSET ${(page - 1) * limit}
+  `;
+
+  res.json({
+    data: companies,
+    pagination: {
+      page,
+      limit,
+      total,
+      totalPages: Math.max(Math.ceil(total / limit), 1),
+    },
+  });
+});
+
 export const adminSetJobActive = TryCatch(async (req, res) => {
   const { jobId } = req.params;
   const { is_active } = req.body;

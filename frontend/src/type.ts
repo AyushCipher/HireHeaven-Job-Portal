@@ -56,7 +56,7 @@ export interface User {
   name: string;
   email: string;
   phone_number: string;
-  role: "jobseeker" | "recruiter";
+  role: "jobseeker" | "recruiter" | "admin";
   bio: string | null;
   resume: string | null;
   resume_public_id: string | null;

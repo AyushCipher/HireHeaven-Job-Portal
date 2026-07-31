@@ -12,6 +12,7 @@ import {
   updateJobSchema,
 } from "../validators.js";
 import {
+  adminListAllCompanies,
   adminListAllJobs,
   adminSetJobActive,
   createCompany,
@@ -43,6 +44,13 @@ router.put(
   requireRole("admin"),
   validate(adminJobActiveSchema),
   adminSetJobActive
+);
+router.get(
+  "/admin/companies",
+  isAuth,
+  requireRole("admin"),
+  validate(applicationsQuerySchema, "query"),
+  adminListAllCompanies
 );
 
 router.post(
