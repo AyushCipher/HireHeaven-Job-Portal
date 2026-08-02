@@ -29,7 +29,7 @@ The project was designed to demonstrate real-world engineering depth: authentica
 - Structured logging (pino), Prometheus-style `/metrics`, and `/health` checks on every service.
 - Shared `@hireheaven/common` package (npm workspaces) for error handling, Redis clients, rate limiting, caching, validation, logging, metrics, and tokens — no copy-pasted utilities.
 - Automated tests (Vitest) and a GitHub Actions CI pipeline that typechecks, builds, and tests every workspace.
-- Cloudinary-based media storage and Gemini-powered AI responses.
+- Cloudinary-based media storage and Groq-powered AI responses.
 - One-command local startup via Docker Compose (Redis, Kafka/Zookeeper, the gateway, all five services, and the frontend).
 
 ## Project Architecture
@@ -62,7 +62,7 @@ flowchart LR
   A --> K
   X --> K
   X --> C[(Cloudinary)]
-  X --> G[(Google Gemini)]
+  X --> G[(Groq)]
   P --> RZ[(Razorpay)]
 ```
 
@@ -114,7 +114,7 @@ sequenceDiagram
 | Testing / CI | Vitest, GitHub Actions |
 | File Storage | Cloudinary |
 | Payments | Razorpay |
-| AI Services | Google Gemini |
+| AI Services | Groq |
 | Mail / Notifications | Nodemailer |
 
 ## Folder Structure
@@ -161,7 +161,7 @@ job-portal/
 - Kafka broker (local via Docker Compose, or a Kafka-protocol-compatible hosted instance such as Redpanda Serverless/Confluent Cloud)
 - Cloudinary account
 - Razorpay account
-- Google Gemini API key
+- Groq API key
 
 ### Quick Start (Docker Compose)
 
@@ -171,7 +171,7 @@ First, copy each `.env.example` to `.env` and fill in your own values (see step 
 docker compose up --build
 ```
 
-This starts Redis and Kafka/Zookeeper first, then builds and runs `auth` (5000), `utils` (5001), `user` (5002), `job` (5003), `payment` (5004), the `gateway` (8080), and the `frontend` (3000). The frontend and every service talk to each other through the gateway/Docker's internal network; only the gateway and frontend ports need to be reached from your browser. Each service still reads its own `.env` file for the values Docker Compose doesn't override (`DB_URL`, `JWT_SEC`, Cloudinary, Razorpay, and Gemini credentials) — see below.
+This starts Redis and Kafka/Zookeeper first, then builds and runs `auth` (5000), `utils` (5001), `user` (5002), `job` (5003), `payment` (5004), the `gateway` (8080), and the `frontend` (3000). The frontend and every service talk to each other through the gateway/Docker's internal network; only the gateway and frontend ports need to be reached from your browser. Each service still reads its own `.env` file for the values Docker Compose doesn't override (`DB_URL`, `JWT_SEC`, Cloudinary, Razorpay, and Groq credentials) — see below.
 
 ### Manual Setup
 
@@ -199,7 +199,7 @@ cp services/utils/.env.example services/utils/.env
 cp frontend/.env.example frontend/.env
 ```
 
-`PORT`, `Redis_url` (`redis://localhost:6379`), and `Kafka_Broker` (`localhost:9092`) already have working local defaults. You need to fill in: a `JWT_SEC` (any random string, but the **same value** in `auth`/`job`/`payment`/`user` since tokens issued by auth must verify in the others — generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), `DB_URL` (Neon), Cloudinary keys, `Razorpay_Key`/`Razorpay_Secret`, and `API_KEY_GEMINI`. **Never commit a `.env` file with real values — only `.env.example` (placeholders) is tracked in git.**
+`PORT`, `Redis_url` (`redis://localhost:6379`), and `Kafka_Broker` (`localhost:9092`) already have working local defaults. You need to fill in: a `JWT_SEC` (any random string, but the **same value** in `auth`/`job`/`payment`/`user` since tokens issued by auth must verify in the others — generate one with `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`), `DB_URL` (Neon), Cloudinary keys, `Razorpay_Key`/`Razorpay_Secret`, and `GROQ_API_KEY`. **Never commit a `.env` file with real values — only `.env.example` (placeholders) is tracked in git.**
 5. Start Redis and Kafka yourself (or via `docker compose up redis zookeeper kafka`) if you're running services with `npm run dev` instead of Docker Compose.
 
 ## Environment Variables
@@ -267,7 +267,7 @@ KAFKA_PASSWORD=
 KAFKA_SASL_MECHANISM=scram-sha-256
 SMTP_USER=your_smtp_email@gmail.com
 SMTP_PASS=your_smtp_app_password
-API_KEY_GEMINI=your_gemini_api_key
+GROQ_API_KEY=your_groq_api_key
 Redis_url=redis://localhost:6379
 ```
 
@@ -450,7 +450,7 @@ All endpoints below are reachable through the gateway at its own origin (default
 | Method | Endpoint | Description |
 | --- | --- | --- |
 | POST | `/api/utils/upload` | Upload or replace media in Cloudinary |
-| POST | `/api/utils/career` | Generate career guidance using Gemini |
+| POST | `/api/utils/career` | Generate career guidance using Groq |
 | POST | `/api/utils/resume-analyser` | Analyze a resume for ATS compatibility |
 
 ### Operational Endpoints
