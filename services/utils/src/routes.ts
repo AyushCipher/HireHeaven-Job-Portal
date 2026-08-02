@@ -20,7 +20,9 @@ router.post("/upload", validate(uploadSchema), async (req, res) => {
       await cloudinary.v2.uploader.destroy(public_id);
     }
 
-    const cloud = await cloudinary.v2.uploader.upload(buffer);
+    const cloud = await cloudinary.v2.uploader.upload(buffer, {
+      resource_type: "auto",
+    });
 
     res.json({
       url: cloud.secure_url,
