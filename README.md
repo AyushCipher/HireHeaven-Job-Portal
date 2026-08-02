@@ -359,6 +359,37 @@ Every backend service and the gateway share `Dockerfile.service` at the repo roo
 - **Database**: Neon PostgreSQL is already serverless and requires no separate hosting — just use your project's connection string as `DB_URL` in each deployed service.
 - `docker-compose.yml` at the repo root is intended for local development; for production, run each service as its own deployment so they can scale and fail independently, which is the point of a microservices architecture.
 
+### Production URLs & Cross-Service Env Vars
+
+Deployed service URLs (Render for the backend services/gateway, Vercel for the frontend):
+
+| Service | URL |
+| --- | --- |
+| Gateway | `https://ai-microservices-job-portal-gateway.onrender.com` |
+| Auth | `https://ai-microservices-job-portal-nl5v.onrender.com` |
+| Utils | `https://ai-microservices-job-portal.onrender.com` |
+| User | `https://ai-microservices-job-portal-user.onrender.com` |
+| Job | `https://ai-microservices-job-portal-job.onrender.com` |
+| Payment | `https://ai-microservices-job-portal-payment.onrender.com` |
+| Frontend | `https://ai-microservices-job-portal-fronten.vercel.app` |
+
+These are set in each platform's dashboard (never committed to `.env`). On top of the secrets already configured (DB, Cloudinary, Kafka, etc. — see the tables above), set the following cross-service URLs so the deployed services can actually reach each other:
+
+| Service (dashboard) | Env var | Value |
+| --- | --- | --- |
+| Gateway | `AUTH_SERVICE_URL` | `https://ai-microservices-job-portal-nl5v.onrender.com` |
+| Gateway | `UTILS_SERVICE_URL` | `https://ai-microservices-job-portal.onrender.com` |
+| Gateway | `USER_SERVICE_URL` | `https://ai-microservices-job-portal-user.onrender.com` |
+| Gateway | `JOB_SERVICE_URL` | `https://ai-microservices-job-portal-job.onrender.com` |
+| Gateway | `PAYMENT_SERVICE_URL` | `https://ai-microservices-job-portal-payment.onrender.com` |
+| Auth | `UPLOAD_SERVICE` | `https://ai-microservices-job-portal.onrender.com` (utils) |
+| Auth | `Frontend_Url` | `https://ai-microservices-job-portal-fronten.vercel.app` |
+| Job | `UPLOAD_SERVICE` | `https://ai-microservices-job-portal.onrender.com` (utils) |
+| User | `UPLOAD_SERVICE` | `https://ai-microservices-job-portal.onrender.com` (utils) |
+| Frontend (Vercel) | `NEXT_PUBLIC_API_GATEWAY_URL` | `https://ai-microservices-job-portal-gateway.onrender.com` |
+
+Payment and Utils don't call any other service, so they need no cross-service URL beyond what's already in their tables above. `.github/workflows/keep-alive.yml` pings the gateway and all five backend services' `/health` endpoints every 10 minutes to keep Render's free tier from spinning them down after ~15 minutes idle — this reduces cold starts significantly but isn't a hard guarantee (Render still sleeps services during redeploys/maintenance, and a gateway request still fails if a specific downstream service happens to be asleep between pings). Vercel's frontend doesn't need this — it isn't on a sleeping free-tier container.
+
 ## API Endpoints
 
 All endpoints below are reachable through the gateway at its own origin (default `http://localhost:8080`) using the same paths, e.g. `http://localhost:8080/api/auth/login`.

@@ -1,0 +1,30 @@
+name: Keep Render services warm
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"  # every 10 minutes — Render free tier spins down after ~15 min idle
+  workflow_dispatch:  # allows manual triggering from the Actions tab
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service:
+          - name: gateway
+            url: https://ai-microservices-job-portal-gateway.onrender.com/health
+          - name: auth
+            url: https://ai-microservices-job-portal-nl5v.onrender.com/health
+          - name: job
+            url: https://ai-microservices-job-portal-job.onrender.com/health
+          - name: user
+            url: https://ai-microservices-job-portal-user.onrender.com/health
+          - name: payment
+            url: https://ai-microservices-job-portal-payment.onrender.com/health
+          - name: utils
+            url: https://ai-microservices-job-portal.onrender.com/health
+
+    steps:
+      - name: Ping ${{ matrix.service.name }}
+        run: curl -sf --max-time 60 "${{ matrix.service.url }}"
