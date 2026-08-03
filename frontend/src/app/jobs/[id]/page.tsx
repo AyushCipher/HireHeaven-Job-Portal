@@ -2,23 +2,67 @@
 import Loading from "@/components/loading";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
 import { job_service, useAppData } from "@/context/AppContext";
 import { Application, Job } from "@/type";
 import axios from "axios";
 import {
+  ArrowLeft,
   ArrowRight,
+  Award,
   Briefcase,
   Building2,
+  Calendar,
   CheckCircle2,
-  DollarSign,
+  Clock,
+  Download,
+  FileText,
+  GraduationCap,
+  Laptop,
   MapPin,
+  ShieldCheck,
+  ThumbsDown,
   Users,
+  Wallet,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Cookies from "js-cookie";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import CompanyLogo from "@/components/company-logo";
+import StatCard from "@/components/stat-card";
+import Stepper, { StepperStep } from "@/components/stepper";
+
+const timeLeftLabel = (applyBy: string | null): string => {
+  if (!applyBy) return "—";
+  const diffMs = new Date(applyBy).getTime() - Date.now();
+  if (diffMs <= 0) return "Closed";
+  const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (days >= 1) return `${days} day${days > 1 ? "s" : ""} left`;
+  const hours = Math.max(1, Math.floor(diffMs / (1000 * 60 * 60)));
+  return `${hours} hour${hours !== 1 ? "s" : ""} left`;
+};
+
+const formatDate = (value: string | null) =>
+  value
+    ? new Date(value).toLocaleDateString("en-US", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "—";
+
+const formatCurrency = (value: number | null) =>
+  value != null ? `₹${Number(value).toLocaleString("en-IN")}` : null;
 
 const JobPage = () => {
   const { id } = useParams();
@@ -26,8 +70,11 @@ const JobPage = () => {
   const router = useRouter();
 
   const [job, setJob] = useState<Job | null>(null);
-
   const [applied, setApplied] = useState(false);
+  const [dismissed, setDismissed] = useState(false);
+  const [infoTab, setInfoTab] = useState<"criteria" | "questions">(
+    "criteria"
+  );
 
   useEffect(() => {
     if (applications && id) {
@@ -39,6 +86,12 @@ const JobPage = () => {
 
   const applyJobHandler = (id: number) => {
     applyJob(id);
+  };
+
+  const notInterestedHandler = () => {
+    setDismissed(true);
+    toast.success("Thanks for the feedback — we won't push this role again");
+    router.push("/jobs");
   };
 
   const [loading, setLoading] = useState(true);
@@ -114,8 +167,31 @@ const JobPage = () => {
       toast.error(error.response.data.message);
     }
   };
+
+  const steps: StepperStep[] = useMemo(
+    () =>
+      (job?.rounds || []).map((round) => ({
+        id: round.round_id,
+        name: round.name,
+        description: round.description,
+        status: "upcoming",
+      })),
+    [job?.rounds]
+  );
+
+  const ctcLabel = useMemo(() => {
+    if (!job) return "Not disclosed";
+    if (job.ctc_min && job.ctc_max) {
+      return `${formatCurrency(job.ctc_min)} – ${formatCurrency(job.ctc_max)}`;
+    }
+    if (job.salary) return formatCurrency(job.salary) as string;
+    return "Not disclosed";
+  }, [job]);
+
+  if (dismissed) return null;
+
   return (
-    <div className="min-h-screen bg-secondary/30">
+    <div className="min-h-screen bg-secondary/30 pb-28">
       {loading ? (
         <Loading />
       ) : (
@@ -127,31 +203,45 @@ const JobPage = () => {
                 className="mb-6 gap-2"
                 onClick={() => router.back()}
               >
-                <ArrowRight size={18} /> Back to jobs
+                <ArrowLeft size={18} /> Back to jobs
               </Button>
 
-              <Card className="overflow-hidden shadow-lg border-2 mb-6">
-                <div className="bg-blue-600 p-8 border-b">
+              <Card className="overflow-hidden shadow-lg border-2 mb-6 py-0 gap-0">
+                <div className="bg-linear-to-br from-blue-600 to-blue-800 p-8 border-b">
                   <div className="flex items-start justify-between gap-4 flex-wrap">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-3">
-                        <span
-                          className={`px-3 py-1.5 rounded-full text-sm font-medium ${
-                            job.is_active
-                              ? "bg-green-100 dark:bg-green-900/30 text-green-600"
-                              : "bg-red-100 dark:bg-red-900/30 text-red-600"
-                          }`}
-                        >
-                          {job.is_active ? "Open" : "Closed"}
-                        </span>
-                      </div>
+                    <div className="flex-1 flex items-start gap-4">
+                      <CompanyLogo
+                        name={job.company_name}
+                        src={job.company_logo}
+                        className="size-16 border-2 border-white/30 hidden sm:flex"
+                      />
+                      <div>
+                        <div className="flex items-center gap-3 mb-3 flex-wrap">
+                          <span
+                            className={`px-3 py-1.5 rounded-full text-sm font-medium ${
+                              job.is_active
+                                ? "bg-green-100 dark:bg-green-900/30 text-green-600"
+                                : "bg-red-100 dark:bg-red-900/30 text-red-600"
+                            }`}
+                          >
+                            {job.is_active ? "Open For Applications" : "Closed"}
+                          </span>
+                        </div>
 
-                      <h1 className="text-3xl md:text-4xl font-bold mb-4 text-white">
-                        {job.title}
-                      </h1>
-                      <div className="flex items-center gap-2 text-base opacity-70 mb-2 text-white">
-                        <Building2 size={18} />
-                        <span>Company Name</span>
+                        <h1 className="text-3xl md:text-4xl font-bold mb-2 text-white">
+                          {job.title}
+                        </h1>
+                        <div className="flex items-center gap-2 text-base opacity-90 text-white">
+                          <Building2 size={18} />
+                          <span>{job.company_name}</span>
+                          <span className="opacity-60">•</span>
+                          <Link
+                            href={`/company/${job.company_id}`}
+                            className="underline hover:opacity-80"
+                          >
+                            View company
+                          </Link>
+                        </div>
                       </div>
                     </div>
 
@@ -181,53 +271,156 @@ const JobPage = () => {
                       </div>
                     )}
                   </div>
+
+                  {/* meta chip row */}
+                  <div className="flex flex-wrap items-center gap-x-5 gap-y-2 mt-5 text-sm text-white/90">
+                    {job.location && (
+                      <span className="flex items-center gap-1.5">
+                        <MapPin size={14} /> {job.location}
+                      </span>
+                    )}
+                    {job.role && (
+                      <span className="flex items-center gap-1.5">
+                        <Briefcase size={14} /> {job.role}
+                      </span>
+                    )}
+                    {job.category && (
+                      <span className="flex items-center gap-1.5">
+                        <Award size={14} /> {job.category}
+                      </span>
+                    )}
+                    {job.conversion_note && (
+                      <span className="flex items-center gap-1.5">
+                        <ThumbsDown size={14} className="rotate-180" />{" "}
+                        {job.conversion_note}
+                      </span>
+                    )}
+                    <span className="flex items-center gap-1.5">
+                      <Laptop size={14} /> {job.work_location}
+                    </span>
+                    {job.eligible_gender && (
+                      <span className="flex items-center gap-1.5">
+                        <Users size={14} /> {job.eligible_gender}
+                      </span>
+                    )}
+                    {job.eligible_grad_years && (
+                      <span className="flex items-center gap-1.5">
+                        <GraduationCap size={14} /> {job.eligible_grad_years}
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 {/* details */}
-                <div className="p-8">
-                  <div className="grid md:grid-cols-3 gap-6 mb-8">
-                    <div className="flex items-center gap-3 p-4 rounded-lg border bg-background">
-                      <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                        <MapPin size={20} className="text-blue-600" />
+                <div className="p-8 space-y-8">
+                  {(job.criteria || job.questions.length > 0) && (
+                    <div>
+                      <div className="inline-flex rounded-lg border p-1 gap-1 mb-4">
+                        <Button
+                          size="sm"
+                          variant={infoTab === "criteria" ? "default" : "ghost"}
+                          className="gap-2"
+                          onClick={() => setInfoTab("criteria")}
+                        >
+                          <ShieldCheck size={14} /> Criteria
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant={infoTab === "questions" ? "default" : "ghost"}
+                          className="gap-2"
+                          onClick={() => setInfoTab("questions")}
+                        >
+                          <FileText size={14} /> Questions
+                        </Button>
                       </div>
-                      <div>
-                        <p className="text-xs opacity-70 font-medium mb-1">
-                          Location
-                        </p>
-                        <p className="font-semibold">{job.location}</p>
-                      </div>
-                    </div>
 
-                    <div className="flex items-center gap-3 p-4 rounded-lg border bg-background">
-                      <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                        <DollarSign size={20} className="text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-xs opacity-70 font-medium mb-1">
-                          Salary
+                      {infoTab === "criteria" ? (
+                        <p className="text-sm leading-relaxed opacity-80 whitespace-pre-line">
+                          {job.criteria ||
+                            "The recruiter hasn't published eligibility criteria for this role yet."}
                         </p>
-                        <p className="font-semibold">₹{job.salary} P.A</p>
-                      </div>
+                      ) : (
+                        <ul className="space-y-2 text-sm">
+                          {job.questions.length > 0 ? (
+                            job.questions.map((q) => (
+                              <li
+                                key={q.question_id}
+                                className="flex gap-2 opacity-80"
+                              >
+                                <span className="text-blue-600 font-medium">
+                                  Q{q.question_order}.
+                                </span>
+                                {q.question_text}
+                              </li>
+                            ))
+                          ) : (
+                            <li className="opacity-60">
+                              No custom application questions for this role.
+                            </li>
+                          )}
+                        </ul>
+                      )}
                     </div>
+                  )}
 
-                    <div className="flex items-center gap-3 p-4 rounded-lg border bg-background">
-                      <div className="h-12 w-12 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center shrink-0">
-                        <Users size={20} className="text-blue-600" />
-                      </div>
-                      <div>
-                        <p className="text-xs opacity-70 font-medium mb-1">
-                          Openings
-                        </p>
-                        <p className="font-semibold">{job.openings} postions</p>
-                      </div>
-                    </div>
+                  {/* stats row */}
+                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+                    <StatCard
+                      icon={Users}
+                      value={job.applicant_count}
+                      label="Applicants"
+                    />
+                    <StatCard icon={Wallet} value={ctcLabel} label="CTC" sublabel="Per Year" />
+                    {job.job_type === "Internship" && job.stipend ? (
+                      <StatCard
+                        icon={Briefcase}
+                        value={formatCurrency(job.stipend)}
+                        label="Stipend"
+                        sublabel="Per Month"
+                      />
+                    ) : (
+                      <StatCard
+                        icon={Briefcase}
+                        value={job.openings}
+                        label="Openings"
+                      />
+                    )}
+                    <StatCard
+                      icon={Clock}
+                      value={timeLeftLabel(job.apply_by)}
+                      label="Apply by"
+                      sublabel={job.apply_by ? formatDate(job.apply_by) : undefined}
+                    />
+                    <StatCard
+                      icon={Calendar}
+                      value={formatDate(job.date_of_visit)}
+                      label="Date of visit"
+                    />
                   </div>
+
+                  <p className="text-xs opacity-50">
+                    Created {formatDate(job.created_at)}
+                    {job.updated_at && (
+                      <> • Last updated {formatDate(job.updated_at)}</>
+                    )}
+                  </p>
+
+                  {/* hiring process */}
+                  <div>
+                    <h2 className="text-2xl font-bold flex items-center gap-2 mb-4">
+                      <ShieldCheck size={24} className="text-blue-600" />
+                      Hiring Process
+                    </h2>
+                    <Stepper steps={steps} orientation="list" />
+                  </div>
+
+                  <Separator />
 
                   {/* job descripiton */}
                   <div className="space-y-4">
                     <h2 className="text-2xl font-bold flex items-center gap-2">
                       <Briefcase size={24} className="text-blue-600" />
-                      Job Description
+                      About the Job
                     </h2>
 
                     <div className="p-6 rounded-lg bg-secondary border">
@@ -235,7 +428,125 @@ const JobPage = () => {
                         {job.description}
                       </p>
                     </div>
+
+                    <div className="grid sm:grid-cols-2 gap-x-8 gap-y-3 text-sm p-6 rounded-lg border">
+                      {[
+                        ["Requirement", job.openings ? `${job.openings} openings` : null],
+                        ["Role Type", job.role_type],
+                        ["Duration", job.duration],
+                        ["Qualification", job.qualification],
+                        ["Work Mode", job.work_location],
+                        ["Working Days", job.working_days],
+                        ["Location", job.location],
+                      ]
+                        .filter(([, v]) => v)
+                        .map(([label, v]) => (
+                          <div key={label} className="flex justify-between gap-4">
+                            <span className="opacity-60">{label}</span>
+                            <span className="font-medium text-right">{v}</span>
+                          </div>
+                        ))}
+                    </div>
                   </div>
+
+                  {job.tags.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3">Job Tags</h3>
+                      <div className="flex flex-wrap gap-2">
+                        {job.tags.map((tag) => (
+                          <Badge key={tag} variant="secondary">
+                            {tag}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {job.role && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-1">Job Role</h3>
+                      <p className="text-sm opacity-70">{job.role}</p>
+                    </div>
+                  )}
+
+                  <div className="grid sm:grid-cols-2 gap-8">
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase opacity-60 mb-3">
+                        Job
+                      </h3>
+                      <div className="space-y-2.5 text-sm">
+                        {[
+                          ["Start date", formatDate(job.job_start_date)],
+                          ["Min hires", job.min_hires ?? "—"],
+                          ["Expected offers", job.expected_offers ?? "—"],
+                        ].map(([label, v]) => (
+                          <div key={label} className="flex justify-between">
+                            <span className="opacity-60">{label}</span>
+                            <span className="font-medium">{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-semibold uppercase opacity-60 mb-3">
+                        Internship
+                      </h3>
+                      <div className="space-y-2.5 text-sm">
+                        {[
+                          ["Mode", job.internship_mode ?? "—"],
+                          ["Start date", formatDate(job.internship_start_date)],
+                          ["Duration", job.internship_duration ?? "—"],
+                          ["Season", job.internship_season ?? "—"],
+                        ].map(([label, v]) => (
+                          <div key={label} className="flex justify-between">
+                            <span className="opacity-60">{label}</span>
+                            <span className="font-medium">{v}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {job.skills.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3">
+                        Skills Required
+                      </h3>
+                      <div className="flex flex-wrap gap-2">
+                        {job.skills.map((skill) => (
+                          <Badge key={skill} variant="outline">
+                            {skill}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {job.attachments.length > 0 && (
+                    <div>
+                      <h3 className="text-lg font-semibold mb-3">
+                        Attachments
+                      </h3>
+                      <div className="space-y-2">
+                        {job.attachments.map((a) => (
+                          <div
+                            key={a.attachment_id}
+                            className="flex items-center justify-between gap-3 p-3 rounded-lg border"
+                          >
+                            <span className="flex items-center gap-2 text-sm">
+                              <FileText size={16} className="text-blue-600" />
+                              {a.file_name}
+                            </span>
+                            <Link href={a.file_url} target="_blank">
+                              <Button size="sm" variant="outline" className="gap-2">
+                                <Download size={14} /> Download
+                              </Button>
+                            </Link>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               </Card>
             </div>
@@ -251,17 +562,17 @@ const JobPage = () => {
               <label htmlFor="filter-status" className="text-sm font-medium">
                 Filter:
               </label>
-              <select
-                id="filter-status"
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="p-2 border-2 border-gray-300 rounded-md bg-background"
-              >
-                <option value="All">All Status</option>
-                <option value="Submitted">Submitted</option>
-                <option value="Hired">Hired</option>
-                <option value="Rejected">Rejected</option>
-              </select>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger id="filter-status" className="w-40">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="All">All Status</SelectItem>
+                  <SelectItem value="Submitted">Submitted</SelectItem>
+                  <SelectItem value="Hired">Hired</SelectItem>
+                  <SelectItem value="Rejected">Rejected</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
           </div>
 
@@ -307,16 +618,16 @@ const JobPage = () => {
 
                     {/* update Status */}
                     <div className="flex gap-2 pt-3 border-t">
-                      <select
-                        value={value}
-                        onChange={(e) => setValue(e.target.value)}
-                        className="flex-1 p-2 border-2 border-gray-300 rounded-md bg-background"
-                      >
-                        <option value="">Update status</option>
-                        <option value="Submitted">Submitted</option>
-                        <option value="Hired">Hired</option>
-                        <option value="Rejected">Rejected</option>
-                      </select>
+                      <Select value={value} onValueChange={setValue}>
+                        <SelectTrigger className="flex-1">
+                          <SelectValue placeholder="Update status" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Submitted">Submitted</SelectItem>
+                          <SelectItem value="Hired">Hired</SelectItem>
+                          <SelectItem value="Rejected">Rejected</SelectItem>
+                        </SelectContent>
+                      </Select>
                       <Button
                         disabled={btnLoading}
                         onClick={() =>
@@ -341,6 +652,45 @@ const JobPage = () => {
               <p className="text-center py-8 opacity-70">No application Yet.</p>
             </>
           )}
+        </div>
+      )}
+
+      {job && !loading && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-sm">
+          <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
+            <div>
+              <p className="font-semibold text-sm">Ready to apply?</p>
+              <p className="text-xs opacity-60">
+                Review the job details, then apply with your resume.
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button variant="outline" onClick={notInterestedHandler}>
+                Not interested
+              </Button>
+              {isAuth && user?.role === "jobseeker" ? (
+                applied ? (
+                  <Button disabled className="gap-2">
+                    <CheckCircle2 size={16} /> Applied
+                  </Button>
+                ) : (
+                  <Button
+                    disabled={btnLoading || !job.is_active}
+                    onClick={() => applyJobHandler(job.job_id)}
+                    className="gap-2"
+                  >
+                    Apply <ArrowRight size={16} />
+                  </Button>
+                )
+              ) : (
+                <Link href="/jobs">
+                  <Button className="gap-2">
+                    Apply <ArrowRight size={16} />
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </div>
         </div>
       )}
     </div>
