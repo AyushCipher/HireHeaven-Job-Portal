@@ -16,6 +16,9 @@ The project was designed to demonstrate real-world engineering depth: authentica
 - Role-based experience for job seekers, recruiters, and admins.
 - JWT access + refresh token authentication with Redis-backed revocation (logout invalidates both tokens server-side).
 - Job browsing, searching, application tracking, and recruiter job posting, with paginated listings.
+- Rich Job Detail page: recruiter-defined hiring pipeline (an ordered, expandable stepper), live applicant/CTC/apply-by stat cards, eligibility criteria and custom application questions, tags, required skills, and downloadable JD attachments.
+- Recruiter job-posting form with required-field validation (client and server), a round-by-round hiring pipeline builder, and chip inputs for skills/tags/questions.
+- **Application Tracker** (`/tracker`): applicants watch their application move through the recruiter's defined rounds on a visual timeline (filterable by company, status, and job type); recruiters bulk-advance applicants through rounds from a "Manage Applicants" panel, which automatically resolves the application to Hired/Rejected once a terminal round is reached.
 - Company management for recruiter workflows.
 - Admin dashboard (`/admin`, role-gated) for moderation: list/deactivate any job, list/remove any company, list all users.
 - AI-powered resume ATS analysis and AI-powered career path recommendations.
@@ -417,8 +420,8 @@ All endpoints below are reachable through the gateway at its own origin (default
 | PUT | `/api/user/update/resume` | Update resume file |
 | POST | `/api/user/skill/add` | Add a skill |
 | PUT | `/api/user/skill/delete` | Remove a skill |
-| POST | `/api/user/apply/job` | Apply for a job |
-| GET | `/api/user/application/all` | List the current user's applications, paginated |
+| POST | `/api/user/apply/job` | Apply for a job — seeds the application's first hiring-round stage automatically |
+| GET | `/api/user/application/all` | List the current user's applications, paginated (includes company name/logo and job type, for the Tracker) |
 
 ### Job Service
 
@@ -431,12 +434,16 @@ All endpoints below are reachable through the gateway at its own origin (default
 | DELETE | `/api/job/company/:companyId` | Delete a company (owner or admin) |
 | GET | `/api/job/company/all` | List recruiter companies |
 | GET | `/api/job/company/:id` | Get company details (cached) |
-| POST | `/api/job/new` | Create a job posting |
-| PUT | `/api/job/:jobId` | Update a job posting (owner or admin) |
+| POST | `/api/job/new` | Create a job posting, including its hiring rounds, tags, skills, and application questions (owner or admin) |
+| PUT | `/api/job/:jobId` | Update a job posting; hiring rounds are only replaceable while no applications exist yet, to keep applicant progress from pointing at a round that got reshuffled out from under it (owner or admin) |
+| POST | `/api/job/:jobId/attachments` | Upload a JD PDF (or other document) to a job posting (owner or admin) |
 | GET | `/api/job/all` | Get active jobs, paginated and filterable by title/location (cached) |
-| GET | `/api/job/:jobId` | Get a single job (cached) |
+| GET | `/api/job/:jobId` | Get a single job — including its rounds, tags, skills, questions, attachments, and applicant count (cached) |
 | GET | `/api/job/application/:jobId` | Get applications for a job, paginated (owner or admin) |
-| PUT | `/api/job/application/update/:id` | Update an application status (owner or admin) |
+| PUT | `/api/job/application/update/:id` | Update an application's overall status (owner or admin) |
+| GET | `/api/job/application/:id/summary` | Resolve who an application belongs to, for authorization checks (applicant, job owner, or admin) |
+| GET | `/api/job/application/:id/history` | Get an application's full round-by-round stage history, oldest first (applicant, job owner, or admin) |
+| PUT | `/api/job/application/stage` | Bulk-advance one or more applications to a hiring round with a status and optional note; auto-resolves the application to Hired/Rejected on a terminal round (owner or admin) |
 
 ### Payment Service
 
@@ -466,23 +473,66 @@ Every service (including the gateway) exposes:
 
 ### Home Page
 
-> Screenshot of after deployment.
+![Home page](docs/screenshots/home.png)
+
+<details>
+<summary>Dark mode</summary>
+
+![Home page dark mode](docs/screenshots/home-dark.png)
+
+</details>
 
 ### Job Listings
 
-> Screenshot of after deployment.
+![Job listings](docs/screenshots/jobs.png)
 
-### Recruiter Dashboard
+### Job Details
 
-> Screenshot of after deployment.
+Stat cards (applicants, CTC, apply-by countdown), an expandable hiring-process stepper driven entirely by rounds the recruiter defines, eligibility criteria, tags, skills, and JD attachments.
 
-### Resume Analyzer
+![Job details](docs/screenshots/job-detail.png)
 
-> Screenshot of after deployment.
+### Recruiter Job Posting
 
-### Career Guide
+Required-field validation, a round-by-round hiring pipeline builder, and chip inputs for skills/tags/questions.
 
-> Screenshot of after deployment.
+![Recruiter job posting form](docs/screenshots/recruiter-job-form.png)
+
+### Application Tracker
+
+Applicants watch their application move through the recruiter's rounds on a live timeline, filterable by company, status, and job type.
+
+![Application tracker](docs/screenshots/tracker.png)
+
+### Manage Applicants (Recruiter)
+
+Bulk-advance selected applicants to a round with a status and optional note — the final round auto-resolves the application to Hired or Rejected.
+
+![Manage applicants panel](docs/screenshots/manage-applicants.png)
+
+### Company / Recruiter Dashboard
+
+![Company dashboard](docs/screenshots/company-dashboard.png)
+
+### Admin Dashboard
+
+![Admin dashboard](docs/screenshots/admin-dashboard.png)
+
+### About
+
+![About page](docs/screenshots/about.png)
+
+### Contact
+
+![Contact page](docs/screenshots/contact.png)
+
+### AI Career Guide
+
+![Career guide](docs/screenshots/career-guide.png)
+
+### AI Resume Analyzer
+
+![Resume analyzer](docs/screenshots/resume-analyzer.png)
 
 ## Future Improvements
 
@@ -503,6 +553,8 @@ Every service (including the gateway) exposes:
 - Handling binary uploads for resumes, logos, and profile media.
 - Returning structured JSON from AI models reliably enough for UI rendering.
 - Integrating payment, messaging, storage, and AI systems into one workflow.
+- Modeling a recruiter-defined, per-job hiring pipeline (rather than a fixed global one) while keeping a separate, simpler application status untouched for backward compatibility — new stage-tracking data is additive, not a breaking migration of the original schema.
+- Making multi-table writes (a job plus its rounds/tags/skills/questions) atomic on a serverless HTTP-only Postgres driver that doesn't support interactive transactions the way a pooled connection would.
 
 ## Learning Outcomes
 
