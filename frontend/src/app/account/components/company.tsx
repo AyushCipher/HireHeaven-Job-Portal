@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import CompanyLogo from "@/components/company-logo";
 
 const Company = () => {
   const { loading } = useAppData();
@@ -169,13 +170,11 @@ const Company = () => {
                     key={c.company_id}
                     className="flex items-center gap-4 p-4 rounded-lg border-2 hover:border-blue-500 transition-all bg-background"
                   >
-                    <div className="h-16 w-16 rounded-full border-2 overflow-hidden shrink-0 bg-background">
-                      <img
-                        src={c.logo}
-                        alt=""
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
+                    <CompanyLogo
+                      name={c.name}
+                      src={c.logo}
+                      className="size-16 rounded-full border-2 shrink-0"
+                    />
 
                     {/* Company Info */}
                     <div className="flex-1 min-w-0">

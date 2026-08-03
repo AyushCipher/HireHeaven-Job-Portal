@@ -18,6 +18,13 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const locations: string[] = [
   "Delhi",
@@ -143,7 +150,7 @@ const JobsPage = () => {
           ) : (
             <>
               {jobs && jobs.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8 items-stretch">
                   {jobs.map((job) => (
                     <JobCard job={job} key={job.job_id} />
                   ))}
@@ -222,19 +229,24 @@ const JobsPage = () => {
                   <MapPin size={16} />
                   Location
                 </Label>
-                <select
-                  id="location"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  className="w-full h-11 px-3 border-2 border-gray-300 rounded-md bg-transparent focus:outline-none focus:ring2"
+                <Select
+                  value={location || "all"}
+                  onValueChange={(value) =>
+                    setLocation(value === "all" ? "" : value)
+                  }
                 >
-                  <option value="">All Locations</option>
-                  {locations.map((e) => (
-                    <option value={e} key={e}>
-                      {e}
-                    </option>
-                  ))}
-                </select>
+                  <SelectTrigger id="location" className="w-full h-11">
+                    <SelectValue placeholder="All Locations" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Locations</SelectItem>
+                    {locations.map((e) => (
+                      <SelectItem value={e} key={e}>
+                        {e}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

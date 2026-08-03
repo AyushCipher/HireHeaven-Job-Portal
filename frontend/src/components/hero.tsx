@@ -1,4 +1,11 @@
-import { ArrowRight, Briefcase, Search, TrendingUp } from "lucide-react";
+import {
+  ArrowRight,
+  Briefcase,
+  CheckCircle2,
+  Search,
+  ShieldCheck,
+  TrendingUp,
+} from "lucide-react";
 import Link from "next/link";
 import React from "react";
 import { Button } from "./ui/button";
@@ -6,10 +13,19 @@ import { Button } from "./ui/button";
 const Hero = () => {
   return (
     <section className="relative overflow-hidden bg-secondary">
-      <div className="absolute inset-0 opacity-5">
+      <div className="absolute inset-0 opacity-10 dark:opacity-15">
         <div className="absolute top-20 left-10 w-72 h-72 bg-blue-500 rounded-full blur-3xl"></div>
-        <div className="absolute bottom-20 right-10 w-96 h-96  rounded-full blur-3xl"></div>
+        <div className="absolute bottom-20 right-10 w-96 h-96 bg-red-500 rounded-full blur-3xl"></div>
       </div>
+
+      <div
+        className="absolute inset-0 opacity-[0.15] dark:opacity-10 pointer-events-none"
+        style={{
+          backgroundImage:
+            "radial-gradient(currentColor 1px, transparent 1px)",
+          backgroundSize: "24px 24px",
+        }}
+      ></div>
 
       <div className="container mx-auto px-5 py-16 md:py-24 relative">
         <div className="flex flex-col-reverse md:flex-row items-center gap-12 md:gap-16">
@@ -33,8 +49,9 @@ const Hero = () => {
             {/* descripiton */}
             <p className="text-lg md:text-xl leading-relaxed opacity-80 max-w-2xl">
               Connect with top employers and discover opportunities that match
-              your skills. Wheather you're a job seeker or recruiter, we've got
-              you covered with powerful tools and seamless experience.
+              your skills. Whether you&apos;re a job seeker or a recruiter,
+              we&apos;ve got you covered with powerful tools and a seamless
+              experience.
             </p>
 
             {/* stats */}
@@ -80,26 +97,52 @@ const Hero = () => {
             </div>
 
             {/* trust indicator section */}
-            <div className="flex items-center gap-2 text-sm opacity-60 pt-4">
-              <span>✔️ Free to use</span>
-              <span>•</span>
-              <span>✔️ Verified emplyers</span>
-              <span>•</span>
-              <span>✔️ Secure platform</span>
+            <div className="flex flex-wrap items-center justify-center md:justify-start gap-x-5 gap-y-2 text-sm opacity-70 pt-4">
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 size={15} className="text-blue-600" />
+                Free to use
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 size={15} className="text-blue-600" />
+                Verified employers
+              </span>
+              <span className="flex items-center gap-1.5">
+                <CheckCircle2 size={15} className="text-blue-600" />
+                Secure platform
+              </span>
             </div>
           </div>
 
           {/* image section */}
           <div className="flex-1 relative">
-            <div className="relative group">
+            <div className="relative group max-w-md mx-auto md:max-w-none">
               <div className="absolute -inset-4 bg-blue-400 opacity-20 blur-xl group-hover:opacity-30 transition-opacity"></div>
 
-              <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-background">
+              <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-background aspect-4/5 md:aspect-square">
                 <img
                   src="/hero.jpeg"
                   className="object-cover object-center w-full h-full transform transition-transform duration-500 group-hover:scale-105"
-                  alt=""
+                  alt="Job seeker celebrating a new job offer secured through HireHeaven"
                 />
+              </div>
+
+              {/* floating stat card */}
+              <div className="absolute -bottom-6 -left-6 hidden sm:flex items-center gap-3 rounded-xl border bg-background/95 backdrop-blur-sm shadow-xl px-4 py-3">
+                <div className="h-10 w-10 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center shrink-0">
+                  <TrendingUp size={18} className="text-green-600" />
+                </div>
+                <div>
+                  <p className="text-sm font-bold leading-none">2,400+</p>
+                  <p className="text-xs opacity-70 mt-1">Hires this month</p>
+                </div>
+              </div>
+
+              {/* floating verified badge */}
+              <div className="absolute -top-5 -right-5 hidden sm:flex items-center gap-2 rounded-full border bg-background/95 backdrop-blur-sm shadow-xl px-4 py-2.5">
+                <ShieldCheck size={16} className="text-blue-600" />
+                <span className="text-xs font-semibold">
+                  Verified Employers
+                </span>
               </div>
             </div>
           </div>

@@ -1,0 +1,31 @@
+Here's how to run HireHeaven locally, based on what actually worked in this session. Open a separate terminal (PowerShell) tab/window per service — running them all from one script tends to hit resource limits on Windows.
+
+One-time setup (only needed after a fresh clone, or if you move/rename this folder — that's what broke it just now):
+
+
+npm install
+npm run build --workspace=@hireheaven/common
+.env files already exist in each services/* folder and frontend/ with real credentials (Neon DB, Redpanda Kafka, Cloudinary, Razorpay, Gemini), so no need to recopy .env.example.
+
+Start Redis (only if it's not already running — check with netstat -ano | findstr :6379):
+
+
+docker compose up -d redis
+Start each service — one command per terminal window:
+
+
+cd services\auth; npm run dev
+
+cd services\utils; npm run dev
+
+cd services\user; npm run dev
+
+cd services\job; npm run dev
+
+cd services\payment; npm run dev
+
+cd services\gateway; npm run dev
+Start the frontend:
+
+
+cd frontend; npm run dev

@@ -6,7 +6,9 @@ import {
   Briefcase,
   Home,
   Info,
+  ListChecks,
   LogOut,
+  Mail,
   Menu,
   ShieldAlert,
   User,
@@ -65,12 +67,32 @@ const NavBar = () => {
               </Button>
             </Link>
 
+            {isAuth && (
+              <Link href={"/tracker"}>
+                <Button
+                  variant={"ghost"}
+                  className="flex items-center gap-2 font-medium"
+                >
+                  <ListChecks size={16} /> Tracker
+                </Button>
+              </Link>
+            )}
+
             <Link href={"/about"}>
               <Button
                 variant={"ghost"}
                 className="flex items-center gap-2 font-medium"
               >
                 <Info size={16} /> About
+              </Button>
+            </Link>
+
+            <Link href={"/contact"}>
+              <Button
+                variant={"ghost"}
+                className="flex items-center gap-2 font-medium"
+              >
+                <Mail size={16} /> Contact
               </Button>
             </Link>
           </div>
@@ -191,12 +213,32 @@ const NavBar = () => {
             </Button>
           </Link>
 
+          {isAuth && (
+            <Link href={"/tracker"} onClick={toggleMenu}>
+              <Button
+                variant={"ghost"}
+                className="w-full justify-start gap-3 h-11"
+              >
+                <ListChecks size={18} /> Tracker
+              </Button>
+            </Link>
+          )}
+
           <Link href={"/about"} onClick={toggleMenu}>
             <Button
               variant={"ghost"}
               className="w-full justify-start gap-3 h-11"
             >
               <Info size={18} /> About
+            </Button>
+          </Link>
+
+          <Link href={"/contact"} onClick={toggleMenu}>
+            <Button
+              variant={"ghost"}
+              className="w-full justify-start gap-3 h-11"
+            >
+              <Mail size={18} /> Contact
             </Button>
           </Link>
 

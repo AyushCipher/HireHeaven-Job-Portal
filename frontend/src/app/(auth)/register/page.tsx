@@ -11,6 +11,13 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Loading from "@/components/loading";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const RegisterPage = () => {
   const [name, setName] = useState("");
@@ -90,18 +97,16 @@ const RegisterPage = () => {
                 I want to
               </Label>
               <div className="relative">
-                <Briefcase className="icon-style" />
-                <select
-                  id="role"
-                  value={role}
-                  onChange={(e) => setRole(e.target.value)}
-                  className="w-full h-11 pl-10 pr-4 border-2 border-gray-300 rounded-md bg-transparent "
-                  required
-                >
-                  <option value="">Select your role</option>
-                  <option value="jobseeker">Find a Job</option>
-                  <option value="recruiter">Hire Talent</option>
-                </select>
+                <Briefcase className="icon-style z-10" />
+                <Select value={role} onValueChange={setRole}>
+                  <SelectTrigger id="role" className="w-full h-11 pl-10">
+                    <SelectValue placeholder="Select your role" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="jobseeker">Find a Job</SelectItem>
+                    <SelectItem value="recruiter">Hire Talent</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
 

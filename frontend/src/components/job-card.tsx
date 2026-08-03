@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Button } from "./ui/button";
+import CompanyLogo from "./company-logo";
 
 interface JobCardProps {
   job: Job;
@@ -36,8 +37,10 @@ const JobCard: React.FC<JobCardProps> = ({ job }) => {
   }, [applications, job.job_id]);
 
   return (
-    <Card className="w-full max-w-[380px] hover:shadow-lg transition-all duration-300 border-2 hover:border-blue-500 group">
-      <CardHeader className="space-y-4 pb-4">
+    <Card className="w-full h-full flex flex-col overflow-hidden py-0 gap-0 rounded-2xl hover:shadow-xl transition-all duration-300 border hover:border-blue-500 group">
+      <div className="h-1 w-full bg-linear-to-r from-blue-600 via-blue-500 to-red-500 scale-x-0 group-hover:scale-x-100 origin-left transition-transform duration-300" />
+
+      <CardHeader className="space-y-4 pt-6 pb-4">
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <h3 className="text-xl font-bold mb-2 line-clamp-2 group-hover:text-blue-600 transition-colors">
@@ -45,37 +48,38 @@ const JobCard: React.FC<JobCardProps> = ({ job }) => {
             </h3>
             <div className="flex items-center gap-2 text-sm opacity-70">
               <Building2 size={16} />
-              <span>{job.company_name}</span>
+              <span className="truncate">{job.company_name}</span>
             </div>
           </div>
 
           <Link href={`/company/${job.company_id}`} className="shrink-0">
-            <div className="w-14 h-14 rounded-xl border-2 overflow-hidden hover:scale-105 transition-transform bg-background">
-              <img
-                src={job.company_logo}
-                alt=""
-                className="w-full h-full object-cover"
-              />
-            </div>
+            <CompanyLogo
+              name={job.company_name}
+              src={job.company_logo}
+              className="size-14 border-2 hover:scale-105 transition-transform"
+            />
           </Link>
         </div>
 
-        <div className="space-y-2">
-          <div className="flex items-center gap-2 text-sm">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600">
-              <MapPin size={14} />
-              <span className="font-medium">{job.location}</span>
+        <div className="flex flex-wrap items-center gap-2 text-sm">
+          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-600">
+            <MapPin size={14} />
+            <span className="font-medium">{job.location}</span>
+          </div>
+          {job.job_type && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-100 dark:bg-purple-900/30 text-purple-600">
+              <span className="font-medium">{job.job_type}</span>
             </div>
-          </div>
+          )}
+        </div>
 
-          <div className="flex items-center gap-2 text-base font-semibold">
-            <DollarSign size={18} className="text-green-600" />
-            <span>₹ {job.salary} P.A</span>
-          </div>
+        <div className="flex items-center gap-2 text-base font-semibold">
+          <DollarSign size={18} className="text-green-600" />
+          <span>₹ {job.salary} P.A</span>
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-3 pt-4 border-t">
+      <CardContent className="flex flex-col gap-3 pt-4 pb-6 border-t mt-auto">
         <div className="flex w-full gap-2">
           <Link href={`/jobs/${job.job_id}`} className="flex-1">
             <Button variant={"outline"} className="w-full gap-2 group/btn">
