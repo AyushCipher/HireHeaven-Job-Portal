@@ -8,6 +8,7 @@ import {
   createCompanySchema,
   createJobSchema,
   jobListQuerySchema,
+  updateApplicationStageSchema,
   updateApplicationStatusSchema,
   updateJobSchema,
 } from "../validators.js";
@@ -21,10 +22,14 @@ import {
   getAllActiveJobs,
   getAllApplicationForJob,
   getAllCompany,
+  getApplicationHistory,
+  getApplicationSummary,
   getCompanyDetails,
   getSingleJob,
   updateApplication,
+  updateApplicationStage,
   updateJob,
+  uploadJobAttachment,
 } from "../controllers/job.js";
 
 const router = express.Router();
@@ -63,6 +68,7 @@ router.post(
 router.delete("/company/:companyId", isAuth, deleteCompany);
 router.post("/new", isAuth, validate(createJobSchema), createJob);
 router.put("/:jobId", isAuth, validate(updateJobSchema), updateJob);
+router.post("/:jobId/attachments", isAuth, uploadFile, uploadJobAttachment);
 router.get("/company/all", isAuth, getAllCompany);
 router.get("/company/:id", getCompanyDetails);
 router.get("/all", validate(jobListQuerySchema, "query"), getAllActiveJobs);
@@ -73,11 +79,19 @@ router.get(
   validate(applicationsQuerySchema, "query"),
   getAllApplicationForJob
 );
+router.get("/application/:id/summary", isAuth, getApplicationSummary);
+router.get("/application/:id/history", isAuth, getApplicationHistory);
 router.put(
   "/application/update/:id",
   isAuth,
   validate(updateApplicationStatusSchema),
   updateApplication
+);
+router.put(
+  "/application/stage",
+  isAuth,
+  validate(updateApplicationStageSchema),
+  updateApplicationStage
 );
 
 export default router;

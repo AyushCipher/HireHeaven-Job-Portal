@@ -18,8 +18,11 @@ async function initDB() {
         IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'work_location') THEN 
         CREATE TYPE work_location AS ENUM ('On-site', 'Remote', 'Hybrid');
         END IF;
-        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'application_status') THEN 
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'application_status') THEN
         CREATE TYPE application_status AS ENUM ('Submitted', 'Rejected', 'Hired');
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'stage_status') THEN
+        CREATE TYPE stage_status AS ENUM ('upcoming', 'in_progress', 'completed', 'rejected');
         END IF;
     END$$;
     `;
@@ -67,6 +70,102 @@ async function initDB() {
     subscribed BOOLEAN,
     UNIQUE (job_id, applicant_id)
     )
+    `;
+
+    // --- Job Detail / Tracker feature tables (additive, all nullable/new) ---
+
+    await sql`
+    CREATE TABLE IF NOT EXISTS job_details (
+    job_id INTEGER PRIMARY KEY REFERENCES jobs(job_id) ON DELETE CASCADE,
+    apply_by TIMESTAMPTZ,
+    role_type VARCHAR(50),
+    min_hires INTEGER,
+    expected_offers INTEGER,
+    duration VARCHAR(100),
+    stipend NUMERIC(10,2),
+    ctc_min NUMERIC(10,2),
+    ctc_max NUMERIC(10,2),
+    qualification TEXT,
+    working_days VARCHAR(100),
+    category VARCHAR(100),
+    conversion_note VARCHAR(255),
+    eligible_gender VARCHAR(50),
+    eligible_grad_years VARCHAR(100),
+    criteria TEXT,
+    job_start_date TIMESTAMPTZ,
+    date_of_visit TIMESTAMPTZ,
+    internship_mode VARCHAR(50),
+    internship_start_date TIMESTAMPTZ,
+    internship_duration VARCHAR(100),
+    internship_season VARCHAR(100),
+    last_modified_by INTEGER,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    `;
+
+    await sql`
+    CREATE TABLE IF NOT EXISTS job_rounds (
+    round_id SERIAL PRIMARY KEY,
+    job_id INTEGER NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    round_order INTEGER NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    UNIQUE (job_id, round_order)
+    )
+    `;
+
+    await sql`
+    CREATE TABLE IF NOT EXISTS job_tags (
+    tag_id SERIAL PRIMARY KEY,
+    job_id INTEGER NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    tag VARCHAR(100) NOT NULL
+    )
+    `;
+
+    await sql`
+    CREATE TABLE IF NOT EXISTS job_skills (
+    job_skill_id SERIAL PRIMARY KEY,
+    job_id INTEGER NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    skill VARCHAR(100) NOT NULL
+    )
+    `;
+
+    await sql`
+    CREATE TABLE IF NOT EXISTS job_questions (
+    question_id SERIAL PRIMARY KEY,
+    job_id INTEGER NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    question_order INTEGER NOT NULL,
+    question_text TEXT NOT NULL,
+    UNIQUE (job_id, question_order)
+    )
+    `;
+
+    await sql`
+    CREATE TABLE IF NOT EXISTS job_attachments (
+    attachment_id SERIAL PRIMARY KEY,
+    job_id INTEGER NOT NULL REFERENCES jobs(job_id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL,
+    file_url VARCHAR(500) NOT NULL,
+    file_public_id VARCHAR(255),
+    uploaded_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    `;
+
+    await sql`
+    CREATE TABLE IF NOT EXISTS application_stage_history (
+    history_id SERIAL PRIMARY KEY,
+    application_id INTEGER NOT NULL REFERENCES applications(application_id) ON DELETE CASCADE,
+    round_id INTEGER REFERENCES job_rounds(round_id) ON DELETE SET NULL,
+    stage_name VARCHAR(255) NOT NULL,
+    status stage_status NOT NULL DEFAULT 'upcoming',
+    note TEXT,
+    changed_by INTEGER,
+    changed_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    )
+    `;
+
+    await sql`
+    ALTER TABLE applications ADD COLUMN IF NOT EXISTS current_round_id INTEGER REFERENCES job_rounds(round_id)
     `;
 
     console.log(

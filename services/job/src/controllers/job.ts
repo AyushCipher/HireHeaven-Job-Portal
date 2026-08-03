@@ -105,6 +105,11 @@ export const deleteCompany = TryCatch(
   }
 );
 
+interface JobRoundInput {
+  name: string;
+  description?: string;
+}
+
 export const createJob = TryCatch(async (req: AuthenticatedRequest, res) => {
   const user = req.user;
 
@@ -129,11 +134,32 @@ export const createJob = TryCatch(async (req: AuthenticatedRequest, res) => {
     work_location,
     company_id,
     openings,
+    rounds,
+    tags,
+    skills,
+    questions,
+    apply_by,
+    role_type,
+    duration,
+    qualification,
+    working_days,
+    min_hires,
+    expected_offers,
+    stipend,
+    ctc_min,
+    ctc_max,
+    category,
+    conversion_note,
+    eligible_gender,
+    eligible_grad_years,
+    criteria,
+    job_start_date,
+    date_of_visit,
+    internship_mode,
+    internship_start_date,
+    internship_duration,
+    internship_season,
   } = req.body;
-
-  if (!title || !description || !salary || !location || !role || !openings) {
-    throw new ErrorHandler(400, "All the fields required");
-  }
 
   const [company] =
     await sql`SELECT company_id FROM companies WHERE company_id = ${company_id} AND recruiter_id = ${user.user_id}`;
@@ -144,6 +170,60 @@ export const createJob = TryCatch(async (req: AuthenticatedRequest, res) => {
 
   const [newJob] =
     await sql`INSERT INTO jobs (title, description, salary, location, role, job_type, work_location, company_id, posted_by_recuriter_id, openings) VALUES (${title}, ${description}, ${salary}, ${location}, ${role}, ${job_type}, ${work_location}, ${company_id}, ${user.user_id}, ${openings}) RETURNING *`;
+
+  // job_details + the recruiter-defined pipeline/tags/skills/questions are
+  // written atomically; if any of it fails, the jobs row is rolled back by
+  // hand (the neon HTTP driver's transaction() can't span a statement that
+  // depends on newJob.job_id existing first, so this is a two-phase write).
+  try {
+    const detailInsert = sql`
+      INSERT INTO job_details (
+        job_id, apply_by, role_type, min_hires, expected_offers, duration, stipend,
+        ctc_min, ctc_max, qualification, working_days, category, conversion_note,
+        eligible_gender, eligible_grad_years, criteria, job_start_date, date_of_visit,
+        internship_mode, internship_start_date, internship_duration, internship_season,
+        last_modified_by
+      ) VALUES (
+        ${newJob.job_id}, ${apply_by}, ${role_type}, ${min_hires ?? null}, ${expected_offers ?? null},
+        ${duration}, ${stipend ?? null}, ${ctc_min ?? null}, ${ctc_max ?? null}, ${qualification},
+        ${working_days}, ${category ?? null}, ${conversion_note ?? null}, ${eligible_gender ?? null},
+        ${eligible_grad_years ?? null}, ${criteria ?? null}, ${job_start_date ?? null}, ${date_of_visit ?? null},
+        ${internship_mode ?? null}, ${internship_start_date ?? null}, ${internship_duration ?? null},
+        ${internship_season ?? null}, ${user.user_id}
+      )`;
+
+    const roundInserts = (rounds as JobRoundInput[]).map(
+      (round, index) =>
+        sql`INSERT INTO job_rounds (job_id, round_order, name, description) VALUES (${newJob.job_id}, ${index + 1}, ${round.name}, ${round.description ?? null})`
+    );
+    const tagInserts = (tags as string[]).map(
+      (tag) =>
+        sql`INSERT INTO job_tags (job_id, tag) VALUES (${newJob.job_id}, ${tag})`
+    );
+    const skillInserts = (skills as string[]).map(
+      (skill) =>
+        sql`INSERT INTO job_skills (job_id, skill) VALUES (${newJob.job_id}, ${skill})`
+    );
+    const questionInserts = (questions as string[]).map(
+      (question, index) =>
+        sql`INSERT INTO job_questions (job_id, question_order, question_text) VALUES (${newJob.job_id}, ${index + 1}, ${question})`
+    );
+
+    await sql.transaction([
+      detailInsert,
+      ...roundInserts,
+      ...tagInserts,
+      ...skillInserts,
+      ...questionInserts,
+    ] as any);
+  } catch (error) {
+    console.error("Failed to save job details, rolling back job row", error);
+    await sql`DELETE FROM jobs WHERE job_id = ${newJob.job_id}`;
+    throw new ErrorHandler(
+      500,
+      "Failed to save job details, please try again"
+    );
+  }
 
   await Promise.all([
     invalidateByPrefix(JOB_LIST_CACHE_PREFIX),
@@ -178,13 +258,39 @@ export const updateJob = TryCatch(async (req: AuthenticatedRequest, res) => {
     role,
     job_type,
     work_location,
-    company_id,
     openings,
     is_active,
+    rounds,
+    tags,
+    skills,
+    questions,
+    apply_by,
+    role_type,
+    duration,
+    qualification,
+    working_days,
+    min_hires,
+    expected_offers,
+    stipend,
+    ctc_min,
+    ctc_max,
+    category,
+    conversion_note,
+    eligible_gender,
+    eligible_grad_years,
+    criteria,
+    job_start_date,
+    date_of_visit,
+    internship_mode,
+    internship_start_date,
+    internship_duration,
+    internship_season,
   } = req.body;
 
+  const jobId = req.params.jobId;
+
   const [existingJob] =
-    await sql`SELECT posted_by_recuriter_id FROM jobs WHERE job_id = ${req.params.jobId}`;
+    await sql`SELECT posted_by_recuriter_id, company_id FROM jobs WHERE job_id = ${jobId}`;
 
   if (!existingJob) {
     throw new ErrorHandler(404, "Job not found");
@@ -197,22 +303,86 @@ export const updateJob = TryCatch(async (req: AuthenticatedRequest, res) => {
     throw new ErrorHandler(403, "Forbiden: You are not allowed");
   }
 
-  const [updatedJob] = await sql`UPDATE jobs SET title = ${title},
-  description = ${description},
-  salary = ${salary},
-  location = ${location},
-  role = ${role},
-  job_type = ${job_type},
-  work_location = ${work_location},
-  openings = ${openings},
-  is_active = ${is_active}
-  WHERE job_id = ${req.params.jobId} RETURNING *;
-  `;
+  // Rounds are immutable-by-convention once any application exists against
+  // this job, so applications.current_round_id / stage history never point
+  // at a round that got reshuffled out from under them mid-pipeline.
+  const [{ count: applicationCount }] = (await sql`
+    SELECT COUNT(*)::int AS count FROM applications WHERE job_id = ${jobId}
+  `) as { count: number }[];
+
+  const roundInserts = (rounds as JobRoundInput[]).map(
+    (round, index) =>
+      sql`INSERT INTO job_rounds (job_id, round_order, name, description) VALUES (${jobId}, ${index + 1}, ${round.name}, ${round.description ?? null})`
+  );
+  const tagInserts = (tags as string[]).map(
+    (tag) => sql`INSERT INTO job_tags (job_id, tag) VALUES (${jobId}, ${tag})`
+  );
+  const skillInserts = (skills as string[]).map(
+    (skill) =>
+      sql`INSERT INTO job_skills (job_id, skill) VALUES (${jobId}, ${skill})`
+  );
+  const questionInserts = (questions as string[]).map(
+    (question, index) =>
+      sql`INSERT INTO job_questions (job_id, question_order, question_text) VALUES (${jobId}, ${index + 1}, ${question})`
+  );
+
+  const txStatements = [
+    sql`UPDATE jobs SET title = ${title},
+    description = ${description},
+    salary = ${salary},
+    location = ${location},
+    role = ${role},
+    job_type = ${job_type},
+    work_location = ${work_location},
+    openings = ${openings},
+    is_active = ${is_active}
+    WHERE job_id = ${jobId} RETURNING *`,
+    sql`INSERT INTO job_details (
+        job_id, apply_by, role_type, min_hires, expected_offers, duration, stipend,
+        ctc_min, ctc_max, qualification, working_days, category, conversion_note,
+        eligible_gender, eligible_grad_years, criteria, job_start_date, date_of_visit,
+        internship_mode, internship_start_date, internship_duration, internship_season,
+        last_modified_by, updated_at
+      ) VALUES (
+        ${jobId}, ${apply_by}, ${role_type}, ${min_hires ?? null}, ${expected_offers ?? null},
+        ${duration}, ${stipend ?? null}, ${ctc_min ?? null}, ${ctc_max ?? null}, ${qualification},
+        ${working_days}, ${category ?? null}, ${conversion_note ?? null}, ${eligible_gender ?? null},
+        ${eligible_grad_years ?? null}, ${criteria ?? null}, ${job_start_date ?? null}, ${date_of_visit ?? null},
+        ${internship_mode ?? null}, ${internship_start_date ?? null}, ${internship_duration ?? null},
+        ${internship_season ?? null}, ${user.user_id}, now()
+      )
+      ON CONFLICT (job_id) DO UPDATE SET
+        apply_by = EXCLUDED.apply_by, role_type = EXCLUDED.role_type, min_hires = EXCLUDED.min_hires,
+        expected_offers = EXCLUDED.expected_offers, duration = EXCLUDED.duration, stipend = EXCLUDED.stipend,
+        ctc_min = EXCLUDED.ctc_min, ctc_max = EXCLUDED.ctc_max, qualification = EXCLUDED.qualification,
+        working_days = EXCLUDED.working_days, category = EXCLUDED.category, conversion_note = EXCLUDED.conversion_note,
+        eligible_gender = EXCLUDED.eligible_gender, eligible_grad_years = EXCLUDED.eligible_grad_years,
+        criteria = EXCLUDED.criteria, job_start_date = EXCLUDED.job_start_date, date_of_visit = EXCLUDED.date_of_visit,
+        internship_mode = EXCLUDED.internship_mode, internship_start_date = EXCLUDED.internship_start_date,
+        internship_duration = EXCLUDED.internship_duration, internship_season = EXCLUDED.internship_season,
+        last_modified_by = EXCLUDED.last_modified_by, updated_at = now()`,
+    sql`DELETE FROM job_tags WHERE job_id = ${jobId}`,
+    sql`DELETE FROM job_skills WHERE job_id = ${jobId}`,
+    sql`DELETE FROM job_questions WHERE job_id = ${jobId}`,
+    ...tagInserts,
+    ...skillInserts,
+    ...questionInserts,
+  ];
+
+  if (applicationCount === 0) {
+    txStatements.push(
+      sql`DELETE FROM job_rounds WHERE job_id = ${jobId}`,
+      ...roundInserts
+    );
+  }
+
+  const results = await sql.transaction(txStatements as any);
+  const updatedJob = (results[0] as any[])[0];
 
   await Promise.all([
     invalidateByPrefix(JOB_LIST_CACHE_PREFIX),
-    invalidateByPrefix(`${JOB_SINGLE_CACHE_PREFIX}${req.params.jobId}`),
-    invalidateByPrefix(`${COMPANY_CACHE_PREFIX}${updatedJob.company_id}`),
+    invalidateByPrefix(`${JOB_SINGLE_CACHE_PREFIX}${jobId}`),
+    invalidateByPrefix(`${COMPANY_CACHE_PREFIX}${existingJob.company_id}`),
   ]);
 
   res.json({
@@ -220,6 +390,69 @@ export const updateJob = TryCatch(async (req: AuthenticatedRequest, res) => {
     job: updatedJob,
   });
 });
+
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024; // 10MB
+
+export const uploadJobAttachment = TryCatch(
+  async (req: AuthenticatedRequest, res) => {
+    const user = req.user;
+
+    if (!user) {
+      throw new ErrorHandler(401, "Authentication required");
+    }
+
+    const { jobId } = req.params;
+
+    const [job] =
+      await sql`SELECT posted_by_recuriter_id FROM jobs WHERE job_id = ${jobId}`;
+
+    if (!job) {
+      throw new ErrorHandler(404, "Job not found");
+    }
+
+    if (job.posted_by_recuriter_id !== user.user_id && user.role !== "admin") {
+      throw new ErrorHandler(403, "Forbidden you are not allowed");
+    }
+
+    const file = req.file;
+
+    if (!file) {
+      throw new ErrorHandler(400, "File is required");
+    }
+
+    if (file.mimetype !== "application/pdf") {
+      throw new ErrorHandler(400, "Only PDF files are allowed");
+    }
+
+    if (file.size > MAX_ATTACHMENT_BYTES) {
+      throw new ErrorHandler(400, "File must be 10MB or smaller");
+    }
+
+    const fileBuffer = getBuffer(file);
+
+    if (!fileBuffer || !fileBuffer.content) {
+      throw new ErrorHandler(500, "Failed to create file buffer");
+    }
+
+    const { data } = await axios.post(
+      `${process.env.UPLOAD_SERVICE}/api/utils/upload`,
+      { buffer: fileBuffer.content }
+    );
+
+    const [attachment] = await sql`
+      INSERT INTO job_attachments (job_id, file_name, file_url, file_public_id)
+      VALUES (${jobId}, ${file.originalname}, ${data.url}, ${data.public_id})
+      RETURNING attachment_id, file_name, file_url, uploaded_at
+    `;
+
+    await invalidateByPrefix(`${JOB_SINGLE_CACHE_PREFIX}${jobId}`);
+
+    res.json({
+      message: "Attachment uploaded successfully",
+      attachment,
+    });
+  }
+);
 
 export const getAllCompany = TryCatch(
   async (req: AuthenticatedRequest, res) => {
@@ -337,8 +570,45 @@ export const getSingleJob = TryCatch(async (req, res) => {
     return res.json(cached);
   }
 
-  const [job] =
-    await sql`SELECT * FROM jobs WHERE job_id = ${req.params.jobId}`;
+  const jobId = req.params.jobId;
+
+  // LEFT JOIN, not JOIN: jobs created before this feature shipped have no
+  // job_details row yet, and must still resolve instead of disappearing.
+  // job_details.job_id is deliberately excluded from the select list below
+  // (not jd.*) — it's the same PK as jobs.job_id and would otherwise
+  // silently overwrite it with NULL for every pre-migration job.
+  const [job] = await sql`
+    SELECT j.*, c.name AS company_name, c.logo AS company_logo,
+      jd.apply_by, jd.role_type, jd.min_hires, jd.expected_offers, jd.duration, jd.stipend,
+      jd.ctc_min, jd.ctc_max, jd.qualification, jd.working_days, jd.category, jd.conversion_note,
+      jd.eligible_gender, jd.eligible_grad_years, jd.criteria, jd.job_start_date, jd.date_of_visit,
+      jd.internship_mode, jd.internship_start_date, jd.internship_duration, jd.internship_season,
+      jd.last_modified_by, jd.updated_at
+    FROM jobs j
+    JOIN companies c ON j.company_id = c.company_id
+    LEFT JOIN job_details jd ON jd.job_id = j.job_id
+    WHERE j.job_id = ${jobId}`;
+
+  if (!job) {
+    throw new ErrorHandler(404, "Job not found");
+  }
+
+  const [rounds, tags, skills, questions, attachments, applicantCountRows] =
+    await Promise.all([
+      sql`SELECT round_id, round_order, name, description FROM job_rounds WHERE job_id = ${jobId} ORDER BY round_order ASC`,
+      sql`SELECT tag FROM job_tags WHERE job_id = ${jobId}`,
+      sql`SELECT skill FROM job_skills WHERE job_id = ${jobId}`,
+      sql`SELECT question_id, question_order, question_text FROM job_questions WHERE job_id = ${jobId} ORDER BY question_order ASC`,
+      sql`SELECT attachment_id, file_name, file_url, uploaded_at FROM job_attachments WHERE job_id = ${jobId}`,
+      sql`SELECT COUNT(*)::int AS applicant_count FROM applications WHERE job_id = ${jobId}`,
+    ]);
+
+  job.rounds = rounds;
+  job.tags = (tags as any[]).map((t) => t.tag);
+  job.skills = (skills as any[]).map((s) => s.skill);
+  job.questions = questions;
+  job.attachments = attachments;
+  job.applicant_count = (applicantCountRows as any[])[0]?.applicant_count ?? 0;
 
   await setCache(cacheKey, job, 60);
 
@@ -524,6 +794,186 @@ export const updateApplication = TryCatch(
       message: "Application updated",
       job,
       updatedApplication,
+    });
+  }
+);
+
+// Shared by getApplicationSummary and getApplicationHistory (and reused by
+// the gateway's socket-join check once the WebSocket phase lands) so the
+// "who's allowed to see this application" rule only lives in one place.
+async function resolveApplicationAccess(
+  applicationId: string,
+  user: { user_id: number; role: string }
+) {
+  const [application] = await sql`
+    SELECT a.application_id, a.job_id, a.applicant_id, j.posted_by_recuriter_id
+    FROM applications a
+    JOIN jobs j ON a.job_id = j.job_id
+    WHERE a.application_id = ${applicationId}
+  `;
+
+  if (!application) {
+    throw new ErrorHandler(404, "Application not found");
+  }
+
+  const isOwner =
+    application.applicant_id === user.user_id ||
+    application.posted_by_recuriter_id === user.user_id ||
+    user.role === "admin";
+
+  if (!isOwner) {
+    throw new ErrorHandler(403, "Forbidden: you are not allowed");
+  }
+
+  return application;
+}
+
+export const getApplicationSummary = TryCatch(
+  async (req: AuthenticatedRequest, res) => {
+    if (!req.user) {
+      throw new ErrorHandler(401, "Authentication required");
+    }
+
+    const application = await resolveApplicationAccess(
+      req.params.id as string,
+      req.user
+    );
+
+    res.json({
+      application_id: application.application_id,
+      job_id: application.job_id,
+      applicant_id: application.applicant_id,
+    });
+  }
+);
+
+export const getApplicationHistory = TryCatch(
+  async (req: AuthenticatedRequest, res) => {
+    if (!req.user) {
+      throw new ErrorHandler(401, "Authentication required");
+    }
+
+    const application = await resolveApplicationAccess(
+      req.params.id as string,
+      req.user
+    );
+
+    const history = await sql`
+      SELECT history_id, round_id, stage_name, status, note, changed_at
+      FROM application_stage_history
+      WHERE application_id = ${application.application_id}
+      ORDER BY changed_at ASC
+    `;
+
+    res.json({ data: history });
+  }
+);
+
+export const updateApplicationStage = TryCatch(
+  async (req: AuthenticatedRequest, res) => {
+    const user = req.user;
+
+    if (!user) {
+      throw new ErrorHandler(401, "Authentication required");
+    }
+
+    if (user.role !== "recruiter" && user.role !== "admin") {
+      throw new ErrorHandler(403, "Forbidden: Only recruiter can access this");
+    }
+
+    const { applicationIds, round_id, status, note } = req.body as {
+      applicationIds: number[];
+      round_id: number;
+      status: "upcoming" | "in_progress" | "completed" | "rejected";
+      note?: string;
+    };
+
+    const [round] =
+      await sql`SELECT round_id, job_id, round_order, name FROM job_rounds WHERE round_id = ${round_id}`;
+
+    if (!round) {
+      throw new ErrorHandler(404, "Round not found");
+    }
+
+    const [job] =
+      await sql`SELECT posted_by_recuriter_id, title FROM jobs WHERE job_id = ${round.job_id}`;
+
+    if (!job) {
+      throw new ErrorHandler(404, "Job not found");
+    }
+
+    if (job.posted_by_recuriter_id !== user.user_id && user.role !== "admin") {
+      throw new ErrorHandler(403, "Forbidden you are not allowed");
+    }
+
+    // Defense against a recruiter passing an application id from a
+    // different job: only applications that actually belong to this
+    // round's job are matched.
+    const applications = await sql`
+      SELECT application_id, applicant_email, job_id FROM applications
+      WHERE application_id = ANY(${applicationIds}) AND job_id = ${round.job_id}
+    `;
+
+    if (applications.length === 0) {
+      throw new ErrorHandler(
+        404,
+        "No matching applications found for this job"
+      );
+    }
+
+    // A round being "completed" only means the whole application is Hired
+    // if it's the pipeline's last round; an intermediate round completing
+    // doesn't change the overall Submitted/Rejected/Hired outcome.
+    const [{ max_order }] = (await sql`
+      SELECT MAX(round_order)::int AS max_order FROM job_rounds WHERE job_id = ${round.job_id}
+    `) as { max_order: number }[];
+
+    const isFinalRound = round.round_order === max_order;
+
+    let syncedStatus: "Hired" | "Rejected" | null = null;
+    if (status === "rejected") {
+      syncedStatus = "Rejected";
+    } else if (status === "completed" && isFinalRound) {
+      syncedStatus = "Hired";
+    }
+
+    const historyInserts = (applications as any[]).map(
+      (app) =>
+        sql`INSERT INTO application_stage_history (application_id, round_id, stage_name, status, note, changed_by)
+            VALUES (${app.application_id}, ${round.round_id}, ${round.name}, ${status}, ${note ?? null}, ${user.user_id})`
+    );
+
+    const updateStatements = (applications as any[]).map((app) =>
+      syncedStatus
+        ? sql`UPDATE applications SET current_round_id = ${round.round_id}, status = ${syncedStatus} WHERE application_id = ${app.application_id}`
+        : sql`UPDATE applications SET current_round_id = ${round.round_id} WHERE application_id = ${app.application_id}`
+    );
+
+    await sql.transaction([...historyInserts, ...updateStatements] as any);
+
+    await invalidateByPrefix(`${JOB_SINGLE_CACHE_PREFIX}${round.job_id}`);
+
+    // Fire-and-forget audit event, same best-effort style as the existing
+    // send-mail publish above — never blocks the recruiter's response.
+    // The realtime socket push and email notification are wired up in the
+    // WebSocket phase; this event is there for them to consume later.
+    for (const app of applications as any[]) {
+      publishToTopic("application-stage-updated", {
+        application_id: app.application_id,
+        job_id: round.job_id,
+        round_id: round.round_id,
+        stage_name: round.name,
+        status,
+        note: note ?? null,
+        changed_at: new Date().toISOString(),
+      }).catch((error) => {
+        console.error("Failed to publish stage-update event to kafka", error);
+      });
+    }
+
+    res.json({
+      message: "Application stage updated",
+      updated: applications.length,
     });
   }
 );

@@ -325,12 +325,26 @@ export const applyForJob = TryCatch(async (req: AuthenticatedRequest, res) => {
 
   try {
     [newApplication] =
-      await sql`INSERT INTO applications (job_id, applicant_id, applicant_email, resume, subscribed) VALUES (${job_id}, ${applicant_id}, ${user?.email}, ${resume}, ${isSubscribed})`;
+      await sql`INSERT INTO applications (job_id, applicant_id, applicant_email, resume, subscribed) VALUES (${job_id}, ${applicant_id}, ${user?.email}, ${resume}, ${isSubscribed}) RETURNING *`;
   } catch (error: any) {
     if (error.code === "23505") {
       throw new ErrorHandler(409, "you have already applied to this job.");
     }
     throw error;
+  }
+
+  // Seed the Tracker timeline's first entry. Jobs created before the
+  // hiring-rounds feature shipped have no job_rounds rows yet — the apply
+  // still succeeds, the Tracker just has nothing to show until the
+  // recruiter defines a pipeline for that job.
+  const [firstRound] =
+    await sql`SELECT round_id, name FROM job_rounds WHERE job_id = ${job_id} AND round_order = 1`;
+
+  if (firstRound) {
+    await sql`INSERT INTO application_stage_history (application_id, round_id, stage_name, status, changed_by)
+      VALUES (${newApplication.application_id}, ${firstRound.round_id}, ${firstRound.name}, 'in_progress', ${applicant_id})`;
+
+    await sql`UPDATE applications SET current_round_id = ${firstRound.round_id} WHERE application_id = ${newApplication.application_id}`;
   }
 
   res.json({
@@ -351,7 +365,13 @@ export const getAllaplications = TryCatch(
     `) as { total: number }[];
 
     const applications = await sql`
-    SELECT a.*, j.title AS job_title, j.salary AS job_salary, j.location AS job_location FROM applications a JOIN jobs j ON a.job_id = j.job_id WHERE a.applicant_id = ${req.user?.user_id}
+    SELECT a.*, j.title AS job_title, j.salary AS job_salary, j.location AS job_location,
+      j.job_type AS job_type, j.is_active AS job_is_active,
+      c.name AS company_name, c.logo AS company_logo
+    FROM applications a
+    JOIN jobs j ON a.job_id = j.job_id
+    JOIN companies c ON j.company_id = c.company_id
+    WHERE a.applicant_id = ${req.user?.user_id}
     ORDER BY a.applied_at DESC
     LIMIT ${limit} OFFSET ${(page - 1) * limit}
   `;
