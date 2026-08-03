@@ -19,6 +19,12 @@ describe("job validators", () => {
       work_location: "Remote",
       company_id: "5",
       openings: "2",
+      rounds: [{ name: "Technical Interview" }],
+      apply_by: "2026-12-31",
+      role_type: "Full-Time",
+      duration: "Permanent",
+      qualification: "B.Tech in CS",
+      working_days: "5 Days (Mon-Fri)",
     });
 
     expect(result.success).toBe(true);
