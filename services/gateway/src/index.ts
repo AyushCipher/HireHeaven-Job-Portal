@@ -52,6 +52,16 @@ for (const [mountPath, target] of Object.entries(services)) {
     createProxyMiddleware({
       target,
       changeOrigin: true,
+      // Render's free tier spins a service down after ~15 min idle; a
+      // cold start has taken up to ~45s to boot in practice. These are
+      // explicit (not relying on http-proxy's own 120s/no-timeout
+      // defaults) so a slow-to-wake target isn't cut off early — though
+      // if the platform's own inbound request timeout in front of this
+      // gateway is shorter than that, raising these alone won't help;
+      // the frontend also retries a cold-start 502/503 once or twice as
+      // a second line of defense.
+      proxyTimeout: 120_000, // time waiting for the target to respond
+      timeout: 120_000, // time waiting on the incoming client connection
       // Express strips the mount path from req.url before handing off to
       // this middleware; add it back so the target service sees the same
       // full path it was written to handle (e.g. /api/auth/login).

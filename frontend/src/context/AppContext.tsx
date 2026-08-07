@@ -49,13 +49,37 @@ const clearAuthCookies = () => {
 // axios call in the app (not just ones made through this context) benefits.
 let refreshInFlight: Promise<string | null> | null = null;
 
+const COLD_START_MAX_RETRIES = 2;
+const COLD_START_RETRY_DELAY_MS = 5000;
+
 axios.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    const status = error.response?.status;
+
+    // Render's free tier spins services down after ~15 minutes idle; a
+    // cold start can take 20-45s to boot, which the platform's own
+    // request timeout doesn't always survive, surfacing as a 502/503
+    // even though the service comes up fine moments later. Retry GET
+    // requests (safe to repeat) a couple of times with a pause instead
+    // of surfacing a hard error for what's really just "still waking up."
+    if (
+      (status === 502 || status === 503) &&
+      originalRequest &&
+      originalRequest.method?.toLowerCase() === "get" &&
+      (originalRequest._coldStartRetries || 0) < COLD_START_MAX_RETRIES
+    ) {
+      originalRequest._coldStartRetries =
+        (originalRequest._coldStartRetries || 0) + 1;
+      await new Promise((resolve) =>
+        setTimeout(resolve, COLD_START_RETRY_DELAY_MS)
+      );
+      return axios(originalRequest);
+    }
 
     if (
-      error.response?.status !== 401 ||
+      status !== 401 ||
       originalRequest?._retry ||
       originalRequest?.url?.includes("/api/auth/refresh")
     ) {

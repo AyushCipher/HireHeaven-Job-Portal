@@ -2,7 +2,13 @@ name: Keep Render services warm
 
 on:
   schedule:
-    - cron: "*/10 * * * *"  # every 10 minutes — Render free tier spins down after ~15 min idle
+    - cron: "*/12 * * * *"  # every 12 minutes — Render free tier spins down after ~15 min idle.
+      # GitHub treats `schedule` as best-effort and delays/skips ticks under
+      # load, more so for repos without constant activity; a tighter */10
+      # interval left less slack for that jitter and led to bursts of
+      # overdue/duplicate runs getting cancelled. */12 keeps ~3 min of
+      # margin against the 15 min spin-down while giving the scheduler
+      # more room.
   workflow_dispatch:  # allows manual triggering from the Actions tab
 
 jobs:
