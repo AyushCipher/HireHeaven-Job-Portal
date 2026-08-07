@@ -4,6 +4,7 @@ import React, { useEffect, useRef, useState } from "react";
 import Cookies from "js-cookie";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { getErrorMessage } from "@/lib/utils";
 import Loading from "@/components/loading";
 import { Card, CardDescription, CardTitle } from "@/components/ui/card";
 import {
@@ -101,7 +102,7 @@ const Company = () => {
       clearData();
       fetchCompanies();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setBtnLoading(false);
     }
@@ -123,7 +124,7 @@ const Company = () => {
         toast.success(data.message);
         fetchCompanies();
       } catch (error: any) {
-        toast.error(error.response.data.message);
+        toast.error(getErrorMessage(error));
       } finally {
         setBtnLoading(false);
       }

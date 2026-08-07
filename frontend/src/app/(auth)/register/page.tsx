@@ -11,6 +11,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import Loading from "@/components/loading";
+import { getErrorMessage } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -74,7 +75,7 @@ const RegisterPage = () => {
       setUser(data.user);
       setIsAuth(true);
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
       setIsAuth(false);
     } finally {
       setBtnLoading(false);

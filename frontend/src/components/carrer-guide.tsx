@@ -26,6 +26,7 @@ import { Label } from "./ui/label";
 import { Input } from "./ui/input";
 import { utils_service } from "@/context/AppContext";
 import toast from "react-hot-toast";
+import { getErrorMessage } from "@/lib/utils";
 
 const CarrerGuide = () => {
   const [open, setOpen] = useState(false);
@@ -65,7 +66,7 @@ const CarrerGuide = () => {
       setResponse(data);
       toast.success("Carrer guidence generated");
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }

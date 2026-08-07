@@ -8,6 +8,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import React, { FormEvent, useState } from "react";
 import toast from "react-hot-toast";
+import { getErrorMessage } from "@/lib/utils";
 
 const ForgotPage = () => {
   const [email, setemail] = useState("");
@@ -27,7 +28,7 @@ const ForgotPage = () => {
       toast.success(data.message);
       setemail("");
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setbtnLoading(false);
     }

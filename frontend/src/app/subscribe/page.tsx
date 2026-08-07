@@ -6,6 +6,7 @@ import Cookies from "js-cookie";
 import axios from "axios";
 import { payment_service, useAppData } from "@/context/AppContext";
 import toast from "react-hot-toast";
+import { getErrorMessage } from "@/lib/utils";
 import Loading from "@/components/loading";
 import { Card } from "@/components/ui/card";
 import { CheckCircle, Crown } from "lucide-react";
@@ -63,7 +64,7 @@ const SubscriptionPage = () => {
           setLoading(false);
         } catch (error: any) {
           setLoading(false);
-          toast.error(error.response.data.message);
+          toast.error(getErrorMessage(error));
         }
       },
       theme: {

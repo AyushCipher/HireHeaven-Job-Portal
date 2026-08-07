@@ -34,6 +34,7 @@ import {
   XCircle,
 } from "lucide-react";
 import toast from "react-hot-toast";
+import { getErrorMessage } from "@/lib/utils";
 import {
   Dialog,
   DialogClose,
@@ -60,6 +61,18 @@ import RoundsBuilder, { RoundInput } from "@/components/rounds-builder";
 
 const FieldError: React.FC<{ message?: string }> = ({ message }) =>
   message ? <p className="text-xs text-red-500 mt-1">{message}</p> : null;
+
+// Common questions recruiters ask on SDE-style roles — offered as one-click
+// suggestions so the recruiter isn't retyping the same handful every time.
+const SUGGESTED_APPLICATION_QUESTIONS = [
+  "What is your current notice period?",
+  "Share your LinkedIn profile URL",
+  "Share your GitHub profile URL",
+  "Share your LeetCode / competitive coding profile URL",
+  "Any open source contributions you'd like to highlight?",
+  "Briefly describe your most relevant work experience",
+  "What are your salary / CTC expectations?",
+];
 
 const CompanyPage = () => {
   const { id } = useParams();
@@ -286,7 +299,7 @@ const CompanyPage = () => {
         toast.success("Job has been deleted");
         fetchCompany();
       } catch (error: any) {
-        toast.error(error.response.data.message);
+        toast.error(getErrorMessage(error));
       } finally {
         setBtnLoading(false);
       }
@@ -460,7 +473,7 @@ const CompanyPage = () => {
       fetchCompany();
       handleCloseUpdateModal();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setBtnLoading(false);
     }
@@ -860,6 +873,7 @@ const CompanyPage = () => {
             values={questions}
             onChange={setQuestions}
             placeholder="Type a question and press Add"
+            suggestions={SUGGESTED_APPLICATION_QUESTIONS}
           />
         </div>
       </div>

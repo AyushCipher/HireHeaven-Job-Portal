@@ -33,4 +33,8 @@ jobs:
 
     steps:
       - name: Ping ${{ matrix.service.name }}
-        run: curl -sf --max-time 60 "${{ matrix.service.url }}"
+        # 90s, not 60s: a cold boot has taken just over 60s in practice,
+        # which was marking a service "failed" here even though it came
+        # up fine moments later — this step only needs to wake the
+        # service, not prove it responds within an arbitrary window.
+        run: curl -sf --max-time 90 "${{ matrix.service.url }}"

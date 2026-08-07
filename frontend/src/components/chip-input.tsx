@@ -8,26 +8,32 @@ interface ChipInputProps {
   values: string[];
   onChange: (values: string[]) => void;
   placeholder?: string;
+  suggestions?: string[];
 }
 
 const ChipInput: React.FC<ChipInputProps> = ({
   values,
   onChange,
   placeholder,
+  suggestions,
 }) => {
   const [current, setCurrent] = useState("");
 
-  const add = () => {
-    const trimmed = current.trim();
+  const add = (value?: string) => {
+    const trimmed = (value ?? current).trim();
     if (trimmed && !values.includes(trimmed)) {
       onChange([...values, trimmed]);
     }
-    setCurrent("");
+    if (value === undefined) setCurrent("");
   };
 
   const remove = (value: string) => {
     onChange(values.filter((v) => v !== value));
   };
+
+  const unusedSuggestions = (suggestions || []).filter(
+    (s) => !values.includes(s)
+  );
 
   return (
     <div className="space-y-2">
@@ -44,10 +50,24 @@ const ChipInput: React.FC<ChipInputProps> = ({
           placeholder={placeholder}
           className="h-10"
         />
-        <Button type="button" onClick={add} variant="outline">
+        <Button type="button" onClick={() => add()} variant="outline">
           Add
         </Button>
       </div>
+      {unusedSuggestions.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          {unusedSuggestions.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => add(s)}
+              className="text-xs px-2.5 py-1 rounded-full border border-dashed opacity-60 hover:opacity-100 hover:border-blue-400 transition-all"
+            >
+              + {s}
+            </button>
+          ))}
+        </div>
+      )}
       {values.length > 0 && (
         <div className="flex flex-wrap gap-2">
           {values.map((v) => (

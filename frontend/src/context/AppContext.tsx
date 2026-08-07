@@ -5,6 +5,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import toast, { Toaster } from "react-hot-toast";
 import Cookies from "js-cookie";
 import axios from "axios";
+import { getErrorMessage } from "@/lib/utils";
 
 // All five services default to the API gateway (single origin, port 8080).
 // Set an individual NEXT_PUBLIC_*_SERVICE_URL to bypass the gateway and talk
@@ -49,8 +50,26 @@ const clearAuthCookies = () => {
 // axios call in the app (not just ones made through this context) benefits.
 let refreshInFlight: Promise<string | null> | null = null;
 
-const COLD_START_MAX_RETRIES = 2;
-const COLD_START_RETRY_DELAY_MS = 5000;
+const COLD_START_MAX_RETRIES = 3;
+const COLD_START_RETRY_DELAY_MS = 6000;
+
+// A 502/503 at this layer means Render's edge couldn't reach our app at
+// all (the free tier's cold-start window) — our Express code never ran,
+// so unlike a real 500 there's no risk of double-processing a retry.
+// GETs are always safe; login/register are included too since they're
+// exactly the requests a first-time visitor hits before anything else
+// has had a chance to warm the service up.
+const RETRYABLE_POST_PATHS = ["/api/auth/login", "/api/auth/register"];
+
+function isRetryableColdStart(originalRequest: any): boolean {
+  const method = originalRequest?.method?.toLowerCase();
+  if (method === "get") return true;
+  if (method === "post") {
+    const url: string = originalRequest?.url || "";
+    return RETRYABLE_POST_PATHS.some((path) => url.includes(path));
+  }
+  return false;
+}
 
 axios.interceptors.response.use(
   (response) => response,
@@ -61,13 +80,13 @@ axios.interceptors.response.use(
     // Render's free tier spins services down after ~15 minutes idle; a
     // cold start can take 20-45s to boot, which the platform's own
     // request timeout doesn't always survive, surfacing as a 502/503
-    // even though the service comes up fine moments later. Retry GET
-    // requests (safe to repeat) a couple of times with a pause instead
-    // of surfacing a hard error for what's really just "still waking up."
+    // even though the service comes up fine moments later. Retry with a
+    // pause instead of surfacing a hard error for what's really just
+    // "still waking up."
     if (
       (status === 502 || status === 503) &&
       originalRequest &&
-      originalRequest.method?.toLowerCase() === "get" &&
+      isRetryableColdStart(originalRequest) &&
       (originalRequest._coldStartRetries || 0) < COLD_START_MAX_RETRIES
     ) {
       originalRequest._coldStartRetries =
@@ -170,7 +189,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       toast.success(data.message);
       fetchUser();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -192,7 +211,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       toast.success(data.message);
       fetchUser();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setLoading(false);
     }
@@ -213,7 +232,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       toast.success(data.message);
       fetchUser();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setBtnLoading(false);
     }
@@ -257,7 +276,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       setSkill("");
       fetchUser();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setBtnLoading(false);
     }
@@ -277,7 +296,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       toast.success(data.message);
       fetchUser();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     }
   }
 
@@ -297,7 +316,7 @@ export const AppProvider: React.FC<AppProviderProps> = ({ children }) => {
       toast.success(data.message);
       fetchApplications();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       setBtnLoading(false);
     }

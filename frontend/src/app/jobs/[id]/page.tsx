@@ -30,6 +30,7 @@ import { useParams, useRouter } from "next/navigation";
 import React, { useEffect, useMemo, useState } from "react";
 import Cookies from "js-cookie";
 import toast from "react-hot-toast";
+import { getErrorMessage } from "@/lib/utils";
 import Link from "next/link";
 import {
   Select,
@@ -164,7 +165,7 @@ const JobPage = () => {
       toast.success(data.message);
       fetchJobApplications();
     } catch (error: any) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     }
   };
 
