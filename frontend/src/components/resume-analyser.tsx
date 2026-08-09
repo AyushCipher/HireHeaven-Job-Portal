@@ -41,7 +41,7 @@ const ResumeAnalyzer = () => {
         return;
       }
       if (selectedFile.size > 5 * 1024 * 1024) {
-        toast.error("File size should be less than 5MB");
+        toast.error("File must be 5MB or smaller");
         return;
       }
       setFile(selectedFile);
@@ -73,7 +73,7 @@ const ResumeAnalyzer = () => {
         }
       );
       setResponse(data);
-      toast.success("Resume analyzed successfully!");
+      toast.success("Resume analyzed successfully");
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to analyze resume");
       console.log(error);

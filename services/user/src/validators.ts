@@ -12,6 +12,16 @@ export const skillSchema = z.object({
 
 export const applyForJobSchema = z.object({
   job_id: z.coerce.number().int().positive(),
+  resume_name: z.string().trim().min(1).max(255).optional(),
+  answers: z
+    .array(
+      z.object({
+        question_id: z.coerce.number().int().positive(),
+        answer_text: z.string().trim().min(1).max(5000),
+      })
+    )
+    .optional()
+    .default([]),
 });
 
 export const paginationQuerySchema = z.object({

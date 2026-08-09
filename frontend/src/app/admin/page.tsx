@@ -133,7 +133,7 @@ const AdminPage = () => {
       await axios.delete(`${job_service}/api/job/company/${companyId}`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      toast.success("Company deleted");
+      toast.success("Company deleted successfully");
       setCompanies((prev) => prev.filter((c) => c.company_id !== companyId));
     } catch (error: any) {
       toast.error(error.response?.data?.message || "Failed to delete company");

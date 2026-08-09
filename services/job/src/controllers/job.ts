@@ -31,7 +31,7 @@ export const createCompany = TryCatch(
     const { name, description, website } = req.body;
 
     if (!name || !description || !website) {
-      throw new ErrorHandler(400, "All the fields required");
+      throw new ErrorHandler(400, "All fields are required");
     }
 
     const existingCompanies =
@@ -47,7 +47,7 @@ export const createCompany = TryCatch(
     const file = req.file;
 
     if (!file) {
-      throw new ErrorHandler(400, "Company Logo file is required");
+      throw new ErrorHandler(400, "Company logo file is required");
     }
 
     const fileBuffer = getBuffer(file);
@@ -300,7 +300,7 @@ export const updateJob = TryCatch(async (req: AuthenticatedRequest, res) => {
     existingJob.posted_by_recuriter_id !== user.user_id &&
     user.role !== "admin"
   ) {
-    throw new ErrorHandler(403, "Forbiden: You are not allowed");
+    throw new ErrorHandler(403, "You do not have permission to perform this action");
   }
 
   // Rounds are immutable-by-convention once any application exists against
@@ -411,7 +411,7 @@ export const uploadJobAttachment = TryCatch(
     }
 
     if (job.posted_by_recuriter_id !== user.user_id && user.role !== "admin") {
-      throw new ErrorHandler(403, "Forbidden you are not allowed");
+      throw new ErrorHandler(403, "You do not have permission to perform this action");
     }
 
     const file = req.file;
@@ -624,7 +624,7 @@ export const getAllApplicationForJob = TryCatch(
     }
 
     if (user.role !== "recruiter" && user.role !== "admin") {
-      throw new ErrorHandler(403, "Forbidden: Only recruiter can access this");
+      throw new ErrorHandler(403, "Only recruiters can access this");
     }
 
     const { jobId } = req.params;
@@ -634,11 +634,11 @@ export const getAllApplicationForJob = TryCatch(
     `;
 
     if (!job) {
-      throw new ErrorHandler(404, "job not found");
+      throw new ErrorHandler(404, "Job not found");
     }
 
     if (job.posted_by_recuriter_id !== user.user_id && user.role !== "admin") {
-      throw new ErrorHandler(403, "Forbidden you are not allowed");
+      throw new ErrorHandler(403, "You do not have permission to perform this action");
     }
 
     const { page, limit } = res.locals.validated.query as {
@@ -655,6 +655,36 @@ export const getAllApplicationForJob = TryCatch(
       ORDER BY subscribed DESC, applied_at ASC
       LIMIT ${limit} OFFSET ${(page - 1) * limit}
     `;
+
+    // Attach each applicant's answers to the recruiter's own questions.
+    // Applications made before the questions feature shipped simply carry an
+    // empty array.
+    if (applications.length > 0) {
+      const applicationIds = applications.map(
+        (a: any) => a.application_id
+      ) as number[];
+
+      const answers = (await sql`
+        SELECT aa.application_id, aa.question_id, aa.answer_text,
+               jq.question_text, jq.question_order
+        FROM application_answers aa
+        JOIN job_questions jq ON aa.question_id = jq.question_id
+        WHERE aa.application_id = ANY(${applicationIds})
+        ORDER BY jq.question_order ASC
+      `) as any[];
+
+      const byApplication = new Map<number, any[]>();
+      for (const answer of answers) {
+        const list = byApplication.get(answer.application_id) ?? [];
+        list.push(answer);
+        byApplication.set(answer.application_id, list);
+      }
+
+      for (const application of applications as any[]) {
+        application.answers =
+          byApplication.get(application.application_id) ?? [];
+      }
+    }
 
     res.json({
       data: applications,
@@ -754,7 +784,7 @@ export const updateApplication = TryCatch(
     }
 
     if (user.role !== "recruiter" && user.role !== "admin") {
-      throw new ErrorHandler(403, "Forbidden: Only recruiter can access this");
+      throw new ErrorHandler(403, "Only recruiters can access this");
     }
 
     const { id } = req.params;
@@ -770,11 +800,11 @@ export const updateApplication = TryCatch(
       await sql`SELECT posted_by_recuriter_id, title FROM jobs WHERE job_id = ${application.job_id}`;
 
     if (!job) {
-      throw new ErrorHandler(404, "no job with this id");
+      throw new ErrorHandler(404, "Job not found");
     }
 
     if (job.posted_by_recuriter_id !== user.user_id && user.role !== "admin") {
-      throw new ErrorHandler(403, "Forbidden you are not allowed");
+      throw new ErrorHandler(403, "You do not have permission to perform this action");
     }
 
     const [updatedApplication] =
@@ -822,7 +852,7 @@ async function resolveApplicationAccess(
     user.role === "admin";
 
   if (!isOwner) {
-    throw new ErrorHandler(403, "Forbidden: you are not allowed");
+    throw new ErrorHandler(403, "You do not have permission to perform this action");
   }
 
   return application;
@@ -878,7 +908,7 @@ export const updateApplicationStage = TryCatch(
     }
 
     if (user.role !== "recruiter" && user.role !== "admin") {
-      throw new ErrorHandler(403, "Forbidden: Only recruiter can access this");
+      throw new ErrorHandler(403, "Only recruiters can access this");
     }
 
     const { applicationIds, round_id, status, note } = req.body as {
@@ -903,7 +933,7 @@ export const updateApplicationStage = TryCatch(
     }
 
     if (job.posted_by_recuriter_id !== user.user_id && user.role !== "admin") {
-      throw new ErrorHandler(403, "Forbidden you are not allowed");
+      throw new ErrorHandler(403, "You do not have permission to perform this action");
     }
 
     // Defense against a recruiter passing an application id from a

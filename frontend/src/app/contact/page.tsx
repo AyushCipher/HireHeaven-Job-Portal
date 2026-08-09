@@ -99,7 +99,7 @@ const ContactPage = () => {
     // Simulates network latency until a dedicated contact endpoint exists.
     await new Promise((resolve) => setTimeout(resolve, 900));
 
-    toast.success("Message sent! Our team will get back to you soon.");
+    toast.success("Message sent. Our team will get back to you soon");
     setName("");
     setEmail("");
     setSubject("");

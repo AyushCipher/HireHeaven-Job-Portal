@@ -134,7 +134,7 @@ Mastery', 'DevOps & Cloud').",
       jsonResponse = JSON.parse(cleaned);
     } catch (error) {
       return res.status(500).json({
-        message: "Ai returned response that was not valid JSON",
+        message: "AI returned a response that was not valid JSON",
         rawResponse: rawText,
       });
     }
@@ -250,7 +250,7 @@ ${resumeText}
       jsonResponse = JSON.parse(cleaned);
     } catch (error) {
       return res.status(500).json({
-        message: "Ai returned response that was not valid JSON",
+        message: "AI returned a response that was not valid JSON",
         rawResponse: rawText,
       });
     }

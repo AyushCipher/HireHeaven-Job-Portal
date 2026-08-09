@@ -1,4 +1,5 @@
 "use client";
+import ApplyDialog from "@/components/apply-dialog";
 import Loading from "@/components/loading";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -21,9 +22,11 @@ import {
   GraduationCap,
   Laptop,
   MapPin,
+  Pencil,
   ShieldCheck,
   ThumbsDown,
   Users,
+  Users2,
   Wallet,
 } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
@@ -67,12 +70,14 @@ const formatCurrency = (value: number | null) =>
 
 const JobPage = () => {
   const { id } = useParams();
-  const { user, isAuth, applyJob, applications, btnLoading } = useAppData();
+  const { user, isAuth, applications, btnLoading } = useAppData();
   const router = useRouter();
 
   const [job, setJob] = useState<Job | null>(null);
   const [applied, setApplied] = useState(false);
   const [dismissed, setDismissed] = useState(false);
+  const [applyOpen, setApplyOpen] = useState(false);
+  const [ownedCompanyIds, setOwnedCompanyIds] = useState<number[]>([]);
   const [infoTab, setInfoTab] = useState<"criteria" | "questions">(
     "criteria"
   );
@@ -85,13 +90,45 @@ const JobPage = () => {
     }
   }, [applications, id]);
 
-  const applyJobHandler = (id: number) => {
-    applyJob(id);
-  };
+  // A recruiter gets management actions only on jobs belonging to a company
+  // they own, so we need their company list before deciding what to render.
+  useEffect(() => {
+    if (!isAuth || user?.role !== "recruiter") {
+      setOwnedCompanyIds([]);
+      return;
+    }
+
+    const fetchOwnedCompanies = async () => {
+      try {
+        const token = Cookies.get("token");
+        const { data } = await axios.get(
+          `${job_service}/api/job/company/all`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        setOwnedCompanyIds(
+          (data as { company_id: number }[]).map((c) => c.company_id)
+        );
+      } catch {
+        // Non-fatal: without the list the recruiter simply sees no
+        // management actions rather than a broken page.
+        setOwnedCompanyIds([]);
+      }
+    };
+
+    fetchOwnedCompanies();
+  }, [isAuth, user?.role]);
+
+  const isJobseeker = isAuth && user?.role === "jobseeker";
+  const isRecruiter = isAuth && user?.role === "recruiter";
+  const ownsThisJob =
+    isRecruiter &&
+    job != null &&
+    (ownedCompanyIds.includes(job.company_id) ||
+      user?.user_id === job.posted_by_recuriter_id);
 
   const notInterestedHandler = () => {
     setDismissed(true);
-    toast.success("Thanks for the feedback — we won't push this role again");
+    toast.success("Hidden for now. You can find it again from the jobs list");
     router.push("/jobs");
   };
 
@@ -149,7 +186,7 @@ const JobPage = () => {
   const [value, setValue] = useState("");
 
   const updateApplicationHandler = async (id: number) => {
-    if (value === "") return toast.error("Please give valid value");
+    if (value === "") return toast.error("Please enter a valid value");
 
     try {
       const { data } = await axios.put(
@@ -259,12 +296,10 @@ const JobPage = () => {
                           <>
                             {job.is_active && (
                               <Button
-                                onClick={() => applyJobHandler(job.job_id)}
-                                disabled={btnLoading}
+                                onClick={() => setApplyOpen(true)}
                                 className="gap-2 h-12 px-8"
                               >
-                                <Briefcase size={18} />{" "}
-                                {btnLoading ? "Applying..." : "Easy Apply"}
+                                <Briefcase size={18} /> Easy Apply
                               </Button>
                             )}
                           </>
@@ -656,43 +691,80 @@ const JobPage = () => {
         </div>
       )}
 
-      {job && !loading && (
+      {/* Action bar. Applying is a candidate action, so the apply/dismiss pair
+          is only rendered for jobseekers. A recruiter who owns this job gets
+          management actions instead, and everyone else (an admin, or a
+          recruiter looking at someone else's posting) gets no bar at all. */}
+      {job && !loading && (isJobseeker || !isAuth || ownsThisJob) && (
         <div className="fixed bottom-0 left-0 right-0 z-40 border-t bg-background/95 backdrop-blur-sm">
           <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between gap-4 flex-wrap">
             <div>
-              <p className="font-semibold text-sm">Ready to apply?</p>
+              <p className="font-semibold text-sm">
+                {ownsThisJob ? "You posted this job" : "Ready to apply?"}
+              </p>
               <p className="text-xs opacity-60">
-                Review the job details, then apply with your resume.
+                {ownsThisJob
+                  ? "Review applicants or update the posting."
+                  : "Review the job details, then apply with your resume."}
               </p>
             </div>
-            <div className="flex items-center gap-3">
-              <Button variant="outline" onClick={notInterestedHandler}>
-                Not interested
-              </Button>
-              {isAuth && user?.role === "jobseeker" ? (
-                applied ? (
-                  <Button disabled className="gap-2">
-                    <CheckCircle2 size={16} /> Applied
-                  </Button>
-                ) : (
-                  <Button
-                    disabled={btnLoading || !job.is_active}
-                    onClick={() => applyJobHandler(job.job_id)}
-                    className="gap-2"
-                  >
-                    Apply <ArrowRight size={16} />
-                  </Button>
-                )
-              ) : (
-                <Link href="/jobs">
-                  <Button className="gap-2">
-                    Apply <ArrowRight size={16} />
+
+            {ownsThisJob ? (
+              <div className="flex items-center gap-3">
+                <Link href={`/company/${job.company_id}?job=${job.job_id}`}>
+                  <Button variant="outline" className="gap-2">
+                    <Pencil size={16} /> Edit job
                   </Button>
                 </Link>
-              )}
-            </div>
+                <Link
+                  href={`/company/${job.company_id}?applicants=${job.job_id}`}
+                >
+                  <Button className="gap-2">
+                    <Users2 size={16} /> View applicants
+                  </Button>
+                </Link>
+              </div>
+            ) : (
+              <div className="flex items-center gap-3">
+                {isJobseeker && (
+                  <Button variant="outline" onClick={notInterestedHandler}>
+                    Not interested
+                  </Button>
+                )}
+                {isJobseeker ? (
+                  applied ? (
+                    <Button disabled className="gap-2">
+                      <CheckCircle2 size={16} /> Applied
+                    </Button>
+                  ) : (
+                    <Button
+                      disabled={!job.is_active}
+                      onClick={() => setApplyOpen(true)}
+                      className="gap-2"
+                    >
+                      Apply <ArrowRight size={16} />
+                    </Button>
+                  )
+                ) : (
+                  <Link href="/login">
+                    <Button className="gap-2">
+                      Log in to apply <ArrowRight size={16} />
+                    </Button>
+                  </Link>
+                )}
+              </div>
+            )}
           </div>
         </div>
+      )}
+
+      {job && isJobseeker && (
+        <ApplyDialog
+          job={job}
+          open={applyOpen}
+          onOpenChange={setApplyOpen}
+          onApplied={() => setApplied(true)}
+        />
       )}
     </div>
   );

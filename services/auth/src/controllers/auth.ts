@@ -62,7 +62,7 @@ export const registerUser = TryCatch(async (req, res, next) => {
     const fileBuffer = getBuffer(file);
 
     if (!fileBuffer || !fileBuffer.content) {
-      throw new ErrorHandler(500, "Failed to generate buffer");
+      throw new ErrorHandler(500, "Failed to generate file buffer");
     }
 
     const { data } = await axios.post(
@@ -84,7 +84,7 @@ export const registerUser = TryCatch(async (req, res, next) => {
   });
 
   res.json({
-    message: "user Registered",
+    message: "Account created successfully",
     user: registeredUser,
     accessToken,
     refreshToken,
@@ -122,7 +122,7 @@ export const loginUser = TryCatch(async (req, res, next) => {
   });
 
   res.json({
-    message: "user Loggedin",
+    message: "Logged in successfully",
     user: userObject,
     accessToken,
     refreshToken,
@@ -259,7 +259,7 @@ export const resetPassword = TryCatch(async (req, res, next) => {
   try {
     decoded = jwt.verify(token as string, process.env.JWT_SEC as string);
   } catch (error) {
-    throw new ErrorHandler(400, "Expired token");
+    throw new ErrorHandler(400, "Token has expired");
   }
 
   if (decoded.type !== "reset") {
@@ -271,7 +271,7 @@ export const resetPassword = TryCatch(async (req, res, next) => {
   const stroredToken = await redisClient.get(`forgot:${email}`);
 
   if (!stroredToken || stroredToken !== token) {
-    throw new ErrorHandler(400, "token has been expired");
+    throw new ErrorHandler(400, "Token has expired");
   }
 
   const users = await sql`SELECT user_id FROM users WHERE email = ${email}`;

@@ -50,7 +50,7 @@ export const isAuth = async (
 
     if (!decodedPayload || !decodedPayload.id || decodedPayload.type !== "access") {
       res.status(401).json({
-        message: "Invalid Token",
+        message: "Invalid token",
       });
       return;
     }
@@ -60,7 +60,7 @@ export const isAuth = async (
       (await isAccessTokenBlacklisted(redisClient, decodedPayload.jti))
     ) {
       res.status(401).json({
-        message: "Token has been revoked. Please login again",
+        message: "Token has been revoked. Please log in again",
       });
       return;
     }
@@ -76,7 +76,7 @@ export const isAuth = async (
 
     if (users.length === 0) {
       res.status(401).json({
-        message: "User associated with this token no longer exists.",
+        message: "User associated with this token no longer exists",
       });
       return;
     }
@@ -91,7 +91,7 @@ export const isAuth = async (
   } catch (error) {
     console.log(error);
     res.status(401).json({
-      message: "Authentication Failed. Please login again",
+      message: "Authentication failed. Please log in again",
     });
   }
 };

@@ -102,7 +102,7 @@ export const updateUserProfile = TryCatch(
     await invalidateCache(userProfileCacheKey(user.user_id));
 
     res.json({
-      message: "Profile Updated successfully",
+      message: "Profile updated successfully",
       updatedUser,
     });
   }
@@ -127,7 +127,7 @@ export const updateProfilePic = TryCatch(
     const fileBuffer = getBuffer(file);
 
     if (!fileBuffer || !fileBuffer.content) {
-      throw new ErrorHandler(500, "failed to generate buffer");
+      throw new ErrorHandler(500, "Failed to generate file buffer");
     }
 
     const { data: uploadResult } = await axios.post(
@@ -145,7 +145,7 @@ export const updateProfilePic = TryCatch(
     await invalidateCache(userProfileCacheKey(user.user_id));
 
     res.json({
-      message: "profile pic updated",
+      message: "Profile picture updated successfully",
       updatedUser,
     });
   }
@@ -161,7 +161,7 @@ export const updateResume = TryCatch(async (req: AuthenticatedRequest, res) => {
   const file = req.file;
 
   if (!file) {
-    throw new ErrorHandler(400, "No pdf file provided");
+    throw new ErrorHandler(400, "No PDF file provided");
   }
 
   const oldPublicId = user.resume_public_id;
@@ -169,7 +169,7 @@ export const updateResume = TryCatch(async (req: AuthenticatedRequest, res) => {
   const fileBuffer = getBuffer(file);
 
   if (!fileBuffer || !fileBuffer.content) {
-    throw new ErrorHandler(500, "failed to generate buffer");
+    throw new ErrorHandler(500, "Failed to generate file buffer");
   }
 
   const { data: uploadResult } = await axios.post(
@@ -210,7 +210,7 @@ export const addSkillToUser = TryCatch(
         await sql`SELECT user_id FROM users WHERE user_id = ${userId}`;
 
       if (users.length === 0) {
-        throw new ErrorHandler(404, "User not found.");
+        throw new ErrorHandler(404, "User not found");
       }
 
       const [skill] =
@@ -250,7 +250,7 @@ export const deleteSkillFromUser = TryCatch(
     const user = req.user;
 
     if (!user) {
-      throw new ErrorHandler(401, "Authentication Required");
+      throw new ErrorHandler(401, "Authentication required");
     }
 
     const { skillName } = req.body;
@@ -283,7 +283,7 @@ export const applyForJob = TryCatch(async (req: AuthenticatedRequest, res) => {
   }
 
   if (user.role !== "jobseeker") {
-    throw new ErrorHandler(403, "Forbidden you are not allowed for this api");
+    throw new ErrorHandler(403, "You do not have permission to perform this action");
   }
 
   const applicant_id = user.user_id;
@@ -297,20 +297,48 @@ export const applyForJob = TryCatch(async (req: AuthenticatedRequest, res) => {
     );
   }
 
-  const { job_id } = req.body;
+  const { job_id, answers, resume_name } = req.body as {
+    job_id: number;
+    answers: { question_id: number; answer_text: string }[];
+    resume_name?: string;
+  };
 
   if (!job_id) {
-    throw new ErrorHandler(400, "job id is required");
+    throw new ErrorHandler(400, "Job id is required");
   }
 
   const [job] = await sql`SELECT is_active FROM jobs WHERE job_id = ${job_id}`;
 
   if (!job) {
-    throw new ErrorHandler(404, "No jobs with this id");
+    throw new ErrorHandler(404, "Job not found");
   }
 
   if (!job.is_active) {
     throw new ErrorHandler(400, "Job is not active");
+  }
+
+  // Every recruiter-defined question is mandatory. Answers are matched by
+  // question_id against this job's own questions so a client can't smuggle in
+  // answers belonging to a different job.
+  const jobQuestions = (await sql`
+    SELECT question_id FROM job_questions WHERE job_id = ${job_id}
+  `) as { question_id: number }[];
+
+  const answerByQuestionId = new Map(
+    (answers ?? []).map((a) => [Number(a.question_id), a.answer_text.trim()])
+  );
+
+  const missing = jobQuestions.filter(
+    (q) => !answerByQuestionId.get(q.question_id)
+  );
+
+  if (missing.length > 0) {
+    throw new ErrorHandler(
+      400,
+      `Please answer all ${jobQuestions.length} question${
+        jobQuestions.length === 1 ? "" : "s"
+      } before applying`
+    );
   }
 
   const now = Date.now();
@@ -325,12 +353,33 @@ export const applyForJob = TryCatch(async (req: AuthenticatedRequest, res) => {
 
   try {
     [newApplication] =
-      await sql`INSERT INTO applications (job_id, applicant_id, applicant_email, resume, subscribed) VALUES (${job_id}, ${applicant_id}, ${user?.email}, ${resume}, ${isSubscribed}) RETURNING *`;
+      await sql`INSERT INTO applications (job_id, applicant_id, applicant_email, resume, resume_name, subscribed) VALUES (${job_id}, ${applicant_id}, ${user?.email}, ${resume}, ${resume_name ?? null}, ${isSubscribed}) RETURNING *`;
   } catch (error: any) {
     if (error.code === "23505") {
-      throw new ErrorHandler(409, "you have already applied to this job.");
+      throw new ErrorHandler(409, "You have already applied to this job");
     }
     throw error;
+  }
+
+  // Persist the answers alongside the application. If this fails the
+  // application row would be left without the answers the recruiter requires,
+  // so roll it back rather than leaving a half-recorded application behind.
+  if (jobQuestions.length > 0) {
+    try {
+      await sql.transaction(
+        jobQuestions.map(
+          (q) =>
+            sql`INSERT INTO application_answers (application_id, question_id, answer_text) VALUES (${newApplication.application_id}, ${q.question_id}, ${answerByQuestionId.get(q.question_id)})`
+        ) as any
+      );
+    } catch (error) {
+      console.error("Failed to save application answers, rolling back", error);
+      await sql`DELETE FROM applications WHERE application_id = ${newApplication.application_id}`;
+      throw new ErrorHandler(
+        500,
+        "Failed to save your answers, please try again"
+      );
+    }
   }
 
   // Seed the Tracker timeline's first entry. Jobs created before the

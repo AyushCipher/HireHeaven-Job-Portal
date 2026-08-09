@@ -168,6 +168,32 @@ async function initDB() {
     ALTER TABLE applications ADD COLUMN IF NOT EXISTS current_round_id INTEGER REFERENCES job_rounds(round_id)
     `;
 
+    // Applicant-supplied label for the attached resume (e.g. "Backend
+    // resume v3"). Nullable: applications made before this feature have no
+    // name, and the UI falls back to the file name in that case.
+    await sql`
+    ALTER TABLE applications ADD COLUMN IF NOT EXISTS resume_name VARCHAR(255)
+    `;
+
+    // Stores a jobseeker's answers to the recruiter-defined questions on a
+    // job. Every application created after this table exists has one row
+    // per job_questions row for its job.
+    await sql`
+    CREATE TABLE IF NOT EXISTS application_answers (
+    answer_id SERIAL PRIMARY KEY,
+    application_id INTEGER NOT NULL REFERENCES applications(application_id) ON DELETE CASCADE,
+    question_id INTEGER NOT NULL REFERENCES job_questions(question_id) ON DELETE CASCADE,
+    answer_text TEXT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE (application_id, question_id)
+    )
+    `;
+
+    await sql`
+    CREATE INDEX IF NOT EXISTS idx_application_answers_application
+    ON application_answers (application_id)
+    `;
+
     console.log(
       "Job service database tables checked and created successfully."
     );

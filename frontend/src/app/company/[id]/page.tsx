@@ -296,7 +296,7 @@ const CompanyPage = () => {
           },
         });
 
-        toast.success("Job has been deleted");
+        toast.success("Job deleted successfully");
         fetchCompany();
       } catch (error: any) {
         toast.error(getErrorMessage(error));
@@ -348,11 +348,11 @@ const CompanyPage = () => {
 
   const submitStageUpdate = async () => {
     if (selectedAppIds.length === 0) {
-      toast.error("Select at least one applicant");
+      toast.error("Please select at least one applicant");
       return;
     }
     if (!stageRoundId || !stageStatus) {
-      toast.error("Choose a round and a status");
+      toast.error("Please choose a round and a status");
       return;
     }
 
@@ -368,7 +368,7 @@ const CompanyPage = () => {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      toast.success("Stage updated for selected applicants");
+      toast.success("Stage updated for the selected applicants");
       if (manageJob) await openManageApplicants(manageJob);
       setSelectedAppIds([]);
       setStageNote("");
@@ -492,6 +492,31 @@ const CompanyPage = () => {
     }
     setJdFile(file);
   };
+
+  // Deep links from the job detail page: ?applicants=<jobId> opens the
+  // Manage Applicants panel, ?job=<jobId> opens the edit dialog. Guarded by a
+  // ref so re-renders (or a refetch after saving) don't reopen the panel.
+  const deepLinkHandled = useRef(false);
+
+  useEffect(() => {
+    if (deepLinkHandled.current || !company?.jobs || !isRecruiterOwner) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const applicantsId = params.get("applicants");
+    const editId = params.get("job");
+    const target = applicantsId ?? editId;
+    if (!target) return;
+
+    const job = company.jobs.find((j) => String(j.job_id) === target);
+    if (!job) return;
+
+    deepLinkHandled.current = true;
+    if (applicantsId) {
+      openManageApplicants(job);
+    } else {
+      handleOpenUpdateModal(job);
+    }
+  }, [company, isRecruiterOwner]);
 
   // Shared between the Add and Update dialogs — both bind to the same
   // state variables, matching this file's existing convention.
@@ -910,6 +935,7 @@ const CompanyPage = () => {
   );
 
   if (loading) return <Loading />;
+
   return (
     <div className="min-h-screen bg-secondary/30">
       {company && (
@@ -1232,6 +1258,29 @@ const CompanyPage = () => {
                               )}{" "}
                               • {a.status}
                             </p>
+                            {a.answers && a.answers.length > 0 && (
+                              <details
+                                className="mt-2"
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                <summary className="text-xs text-blue-500 cursor-pointer hover:underline">
+                                  {a.answers.length} answer
+                                  {a.answers.length === 1 ? "" : "s"}
+                                </summary>
+                                <div className="mt-2 space-y-2 pl-1 border-l-2">
+                                  {a.answers.map((ans) => (
+                                    <div key={ans.question_id} className="pl-3">
+                                      <p className="text-xs opacity-60">
+                                        {ans.question_text}
+                                      </p>
+                                      <p className="text-xs whitespace-pre-wrap">
+                                        {ans.answer_text}
+                                      </p>
+                                    </div>
+                                  ))}
+                                </div>
+                              </details>
+                            )}
                           </div>
                           <Link
                             href={a.resume}
@@ -1239,7 +1288,7 @@ const CompanyPage = () => {
                             className="text-xs text-blue-500 hover:underline shrink-0"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            Resume
+                            {a.resume_name || "Resume"}
                           </Link>
                         </label>
                       ))}

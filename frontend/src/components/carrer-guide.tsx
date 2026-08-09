@@ -54,7 +54,7 @@ const CarrerGuide = () => {
 
   const getCarrerGuidance = async () => {
     if (skills.length === 0) {
-      toast.error("Please add at least on skill");
+      toast.error("Please add at least one skill");
       return;
     }
     setLoading(true);
@@ -64,7 +64,7 @@ const CarrerGuide = () => {
       });
 
       setResponse(data);
-      toast.success("Carrer guidence generated");
+      toast.success("Career guidance generated successfully");
     } catch (error: any) {
       toast.error(getErrorMessage(error));
     } finally {

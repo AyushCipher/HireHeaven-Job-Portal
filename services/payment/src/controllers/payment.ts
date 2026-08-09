@@ -6,7 +6,7 @@ import crypto from "crypto";
 
 export const checkOut = TryCatch(async (req: AuthenticatedRequest, res) => {
   if (!req.user) {
-    throw new ErrorHandler(401, "No valid User");
+    throw new ErrorHandler(401, "User not found");
   }
 
   const user_id = req.user.user_id;
@@ -67,12 +67,12 @@ export const paymentVerification = TryCatch(
         await sql`UPDATE users SET subscription = ${expiryDate} WHERE user_id = ${user?.user_id} RETURNING *`;
 
       res.json({
-        message: "Subscription Purchased Successfully",
+        message: "Subscription purchased successfully",
         updatedUser,
       });
     } else {
       return res.status(400).json({
-        message: "Payment Failed",
+        message: "Payment failed",
       });
     }
   }

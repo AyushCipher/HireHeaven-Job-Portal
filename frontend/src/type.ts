@@ -193,6 +193,14 @@ export interface Company {
 
 type ApplicationStatus = "Submitted" | "Rejected" | "Hired";
 
+export interface ApplicationAnswer {
+  application_id: number;
+  question_id: number;
+  question_text: string;
+  question_order: number;
+  answer_text: string;
+}
+
 export interface Application {
   application_id: number;
   job_id: number;
@@ -200,6 +208,11 @@ export interface Application {
   applicant_email: string;
   status: ApplicationStatus;
   resume: string;
+  // Applicant-supplied label for the attached resume. Null for applications
+  // made before the multi-step apply flow shipped.
+  resume_name: string | null;
+  // Only populated on the recruiter's applicants list.
+  answers?: ApplicationAnswer[];
   applied_at: string;
   subscribed: boolean;
   current_round_id: number | null;

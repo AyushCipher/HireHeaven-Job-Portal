@@ -106,8 +106,11 @@ const About = () => {
             <div className="flex justify-center">
               <img
                 src="/about.jpg"
+                width={1200}
+                height={800}
+                decoding="async"
                 className="w-full max-w-md rounded-2xl shadow-2xl border-4 border-background"
-                alt="Team collaborating on hiring decisions at HireHeaven"
+                alt="A laptop, coffee mug and handwritten notepad on a wooden desk beside a window"
               />
             </div>
           </div>

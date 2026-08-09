@@ -121,8 +121,12 @@ const Hero = () => {
               <div className="relative rounded-2xl overflow-hidden shadow-2xl border-4 border-background aspect-4/5 md:aspect-square">
                 <img
                   src="/hero.jpeg"
+                  width={2000}
+                  height={2000}
+                  fetchPriority="high"
+                  decoding="async"
                   className="object-cover object-center w-full h-full transform transition-transform duration-500 group-hover:scale-105"
-                  alt="Job seeker celebrating a new job offer secured through HireHeaven"
+                  alt="A candidate and a hiring manager shaking hands across a desk after an interview, with a signed offer letter on the table"
                 />
               </div>
 
