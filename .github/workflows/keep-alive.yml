@@ -1,15 +1,20 @@
 name: Keep Render services warm
 
+# Schedule trigger intentionally removed (2026-08-21): pinging all 6 services
+# every ~12 minutes, 24/7, defeats Render free tier's own idle spin-down,
+# which exists specifically to keep usage inside the free monthly
+# instance-hour allowance. Doing that across 6 services simultaneously
+# exhausted that allowance in days and got every service suspended by
+# Render ("This service has been suspended" on every /health check) — a
+# full outage, strictly worse than the occasional cold-start 502 this
+# workflow was meant to prevent. The frontend's own retry-on-502/503
+# interceptor (see frontend/src/context/AppContext.tsx) already makes an
+# individual cold start survivable without needing to keep everything
+# artificially warm around the clock. Left as workflow_dispatch-only so it
+# can still be run manually — e.g. right before a demo/interview — without
+# resuming the automatic loop that caused the suspension.
 on:
-  schedule:
-    - cron: "*/12 * * * *"  # every 12 minutes — Render free tier spins down after ~15 min idle.
-      # GitHub treats `schedule` as best-effort and delays/skips ticks under
-      # load, more so for repos without constant activity; a tighter */10
-      # interval left less slack for that jitter and led to bursts of
-      # overdue/duplicate runs getting cancelled. */12 keeps ~3 min of
-      # margin against the 15 min spin-down while giving the scheduler
-      # more room.
-  workflow_dispatch:  # allows manual triggering from the Actions tab
+  workflow_dispatch: # allows manual triggering from the Actions tab
 
 jobs:
   ping:
