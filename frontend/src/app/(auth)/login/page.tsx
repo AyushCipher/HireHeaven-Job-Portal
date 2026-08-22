@@ -42,14 +42,17 @@ const LoginPage = () => {
         secure: false,
         path: "/",
       });
+
       Cookies.set("refreshToken", data.refreshToken, {
         expires: 7,
         secure: false,
         path: "/",
       });
+
       setUser(data.user);
       setIsAuth(true);
       fetchApplications();
+      
     } catch (error: any) {
       console.log(error);
       toast.error(getErrorMessage(error));
