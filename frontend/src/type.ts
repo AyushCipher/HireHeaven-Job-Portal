@@ -213,6 +213,9 @@ export interface Application {
   resume_name: string | null;
   // Only populated on the recruiter's applicants list.
   answers?: ApplicationAnswer[];
+  // Only populated on the recruiter's applicants list (joined from users).
+  applicant_name?: string;
+  applicant_profile_pic?: string | null;
   applied_at: string;
   subscribed: boolean;
   current_round_id: number | null;

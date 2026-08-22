@@ -16,6 +16,8 @@ import {
   Building2,
   Calendar,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   Download,
   FileText,
@@ -182,6 +184,25 @@ const JobPage = () => {
     filterStatus === "All"
       ? jobApplications
       : jobApplications.filter((app) => app.status === filterStatus);
+
+  const APPLICANTS_PER_PAGE = 5;
+  const [applicantsPage, setApplicantsPage] = useState(1);
+
+  // A filter change can leave the current page past the end of the new,
+  // smaller result set (e.g. on page 3, then filtering down to 1 result) —
+  // reset to page 1 whenever the filtered set changes shape.
+  useEffect(() => {
+    setApplicantsPage(1);
+  }, [filterStatus, jobApplications.length]);
+
+  const applicantsTotalPages = Math.max(
+    Math.ceil(filteredApplications.length / APPLICANTS_PER_PAGE),
+    1
+  );
+  const paginatedApplications = filteredApplications.slice(
+    (applicantsPage - 1) * APPLICANTS_PER_PAGE,
+    applicantsPage * APPLICANTS_PER_PAGE
+  );
 
   const [value, setValue] = useState("");
 
@@ -615,14 +636,24 @@ const JobPage = () => {
           {jobApplications && jobApplications.length > 0 ? (
             <>
               <div className="space-y-4">
-                {filteredApplications.map((e) => (
+                {paginatedApplications.map((e) => (
                   <div
                     className="p-4 rounded-lg border-2 bg-background"
                     key={e.application_id}
                   >
-                    <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center justify-between mb-3 gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <CompanyLogo
+                          name={e.applicant_name || e.applicant_email}
+                          src={e.applicant_profile_pic}
+                          className="rounded-full size-10 text-sm shrink-0"
+                        />
+                        <span className="font-medium truncate">
+                          {e.applicant_name || e.applicant_email}
+                        </span>
+                      </div>
                       <span
-                        className={`px-3 py-1 rounded-full text-sm font-medium ${
+                        className={`px-3 py-1 rounded-full text-sm font-medium shrink-0 ${
                           e.status === "Hired"
                             ? "bg-green-100 dark:bg-green-900/30 text-green-600"
                             : e.status === "Rejected"
@@ -681,6 +712,42 @@ const JobPage = () => {
                 <p className="text-center py-8 opacity-70">
                   No application with status {filterStatus}
                 </p>
+              )}
+
+              {filteredApplications.length > APPLICANTS_PER_PAGE && (
+                <div className="flex items-center justify-between gap-3 mt-5 pt-4 border-t">
+                  <p className="text-sm opacity-60">
+                    Page {applicantsPage} of {applicantsTotalPages} &middot;{" "}
+                    {filteredApplications.length} candidate
+                    {filteredApplications.length === 1 ? "" : "s"}
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      disabled={applicantsPage === 1}
+                      onClick={() =>
+                        setApplicantsPage((p) => Math.max(p - 1, 1))
+                      }
+                    >
+                      <ChevronLeft size={15} /> Prev
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1"
+                      disabled={applicantsPage === applicantsTotalPages}
+                      onClick={() =>
+                        setApplicantsPage((p) =>
+                          Math.min(p + 1, applicantsTotalPages)
+                        )
+                      }
+                    >
+                      Next <ChevronRight size={15} />
+                    </Button>
+                  </div>
+                </div>
               )}
             </>
           ) : (

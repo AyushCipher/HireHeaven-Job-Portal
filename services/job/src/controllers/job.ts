@@ -651,8 +651,11 @@ export const getAllApplicationForJob = TryCatch(
     `) as { total: number }[];
 
     const applications = await sql`
-      SELECT * FROM applications WHERE job_id = ${jobId}
-      ORDER BY subscribed DESC, applied_at ASC
+      SELECT a.*, u.name AS applicant_name, u.profile_pic AS applicant_profile_pic
+      FROM applications a
+      JOIN users u ON u.user_id = a.applicant_id
+      WHERE a.job_id = ${jobId}
+      ORDER BY a.subscribed DESC, a.applied_at ASC
       LIMIT ${limit} OFFSET ${(page - 1) * limit}
     `;
 
