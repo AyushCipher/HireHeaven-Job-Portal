@@ -20,16 +20,24 @@ router.post("/upload", validate(uploadSchema), async (req, res) => {
       await cloudinary.v2.uploader.destroy(public_id);
     }
 
-    // Cloudinary's "auto" resource type resolves PDFs to its "image"
-    // delivery type, which Cloudinary's account-level security default
-    // blocks from public/unsigned access ("Allow delivery of PDF and ZIP
-    // files" is off by default) — every resume/JD upload would 401 with
-    // "deny or ACL failure" even though the upload itself succeeds. "raw"
-    // delivers the file as-is and isn't subject to that restriction.
+    // PDFs are uploaded as "raw" (the correct resource type for a
+    // non-image document) with an explicit .pdf format so the delivered
+    // URL/headers are correct (Content-Type: application/pdf,
+    // Content-Disposition: inline) instead of a generic, extension-less
+    // application/octet-stream that browsers force-download.
+    //
+    // NOTE: whether the file is "image" or "raw", Cloudinary's own
+    // account-level security setting ("Allow delivery of PDF and ZIP
+    // files", off by default) blocks public access to anything it
+    // recognizes as a PDF/ZIP by extension — this upload succeeding does
+    // not by itself mean the file is viewable. That setting has to be
+    // enabled in the Cloudinary dashboard (Settings -> Security) for
+    // resumes/JD PDFs to actually open.
     const isPdf = buffer.startsWith("data:application/pdf");
 
     const cloud = await cloudinary.v2.uploader.upload(buffer, {
       resource_type: isPdf ? "raw" : "auto",
+      ...(isPdf ? { format: "pdf" } : {}),
     });
 
     res.json({
