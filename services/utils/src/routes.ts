@@ -56,34 +56,34 @@ import pdfParse from "pdf-parse";
 
 dotenv.config();
 
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+// Google's Gemini models get retired/renamed over time (this project has
+// already hit that once before, with both a stale Gemini model and later
+// a removed Groq model) - verify against a live generateContent call if
+// this ever 404s again rather than guessing a replacement name.
+const GEMINI_MODEL = "gemini-3.6-flash";
 
-/** Sends a prompt to Groq's chat completions API and returns the model's raw text response. */
-const askGroq = async (prompt: string): Promise<string> => {
+/** Sends a prompt to Gemini's generateContent API and returns the model's raw text response. */
+const askGemini = async (prompt: string): Promise<string> => {
   const response = await fetch(
-    "https://api.groq.com/openai/v1/chat/completions",
+    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent?key=${process.env.GOOGLE_API_KEY}`,
     {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: GROQ_MODEL,
-        messages: [{ role: "user", content: prompt }],
-        response_format: { type: "json_object" },
+        contents: [{ parts: [{ text: prompt }] }],
+        generationConfig: { responseMimeType: "application/json" },
       }),
     }
   );
 
   if (!response.ok) {
     throw new Error(
-      `Groq API request failed with status ${response.status}: ${await response.text()}`
+      `Gemini API request failed with status ${response.status}: ${await response.text()}`
     );
   }
 
   const data = await response.json();
-  return data.choices[0].message.content as string;
+  return data.candidates[0].content.parts[0].text as string;
 };
 
 router.post("/career", aiLimiter, validate(careerSchema), async (req, res) => {
@@ -130,7 +130,7 @@ Mastery', 'DevOps & Cloud').",
 
     let rawText: string;
     try {
-      rawText = await askGroq(prompt);
+      rawText = await askGemini(prompt);
     } catch (error: any) {
       return res.status(502).json({ message: error.message });
     }
@@ -246,7 +246,7 @@ ${resumeText}
 
     let rawText: string;
     try {
-      rawText = await askGroq(prompt);
+      rawText = await askGemini(prompt);
     } catch (error: any) {
       return res.status(502).json({ message: error.message });
     }
