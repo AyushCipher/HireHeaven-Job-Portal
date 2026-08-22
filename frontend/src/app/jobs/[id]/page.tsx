@@ -204,15 +204,20 @@ const JobPage = () => {
     applicantsPage * APPLICANTS_PER_PAGE
   );
 
-  const [value, setValue] = useState("");
+  // Keyed by application_id so each card's status dropdown is independent —
+  // a single shared string here previously meant picking a status for one
+  // applicant visually (and, on Update, actually) applied to every other
+  // applicant's card too.
+  const [statusDraft, setStatusDraft] = useState<Record<number, string>>({});
 
   const updateApplicationHandler = async (id: number) => {
-    if (value === "") return toast.error("Please enter a valid value");
+    const nextStatus = statusDraft[id];
+    if (!nextStatus) return toast.error("Please choose a status");
 
     try {
       const { data } = await axios.put(
         `${job_service}/api/job/application/update/${id}`,
-        { status: value },
+        { status: nextStatus },
         {
           headers: {
             Authorization: `Bearer ${token}`,
@@ -685,7 +690,15 @@ const JobPage = () => {
 
                     {/* update Status */}
                     <div className="flex gap-2 pt-3 border-t">
-                      <Select value={value} onValueChange={setValue}>
+                      <Select
+                        value={statusDraft[e.application_id] || ""}
+                        onValueChange={(v) =>
+                          setStatusDraft((prev) => ({
+                            ...prev,
+                            [e.application_id]: v,
+                          }))
+                        }
+                      >
                         <SelectTrigger className="flex-1">
                           <SelectValue placeholder="Update status" />
                         </SelectTrigger>
