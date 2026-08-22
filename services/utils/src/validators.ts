@@ -11,7 +11,9 @@ export const uploadSchema = z.object({
 });
 
 export const careerSchema = z.object({
-  skills: z.string().trim().min(1, "Skills are required"),
+  // The frontend's chip-input UI collects skills as a list, not a single
+  // free-text string.
+  skills: z.array(z.string().trim().min(1)).min(1, "At least one skill is required"),
 });
 
 export const resumeAnalyserSchema = z.object({

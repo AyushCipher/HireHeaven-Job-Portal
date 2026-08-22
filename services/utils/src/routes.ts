@@ -88,10 +88,10 @@ const askGemini = async (prompt: string): Promise<string> => {
 
 router.post("/career", aiLimiter, validate(careerSchema), async (req, res) => {
   try {
-    const { skills } = req.body;
+    const { skills } = req.body as { skills: string[] };
 
     const prompt = `
-Based on the following skills: ${skills}.
+Based on the following skills: ${skills.join(", ")}.
 
 Please act as a career advisor and generate a career path suggestion.
 Your entire response must be in a valid JSON format. Do not include any text or markdown

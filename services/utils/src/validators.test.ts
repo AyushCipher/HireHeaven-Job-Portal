@@ -12,11 +12,20 @@ describe("utils validators", () => {
     expect(result.success).toBe(true);
   });
 
-  it("careerSchema requires skills text", () => {
-    expect(careerSchema.safeParse({ skills: "" }).success).toBe(false);
+  it("uploadSchema accepts a null public_id (a user's first upload, no prior file to replace)", () => {
+    expect(
+      uploadSchema.safeParse({ buffer: "data:...", public_id: null }).success
+    ).toBe(true);
+  });
+
+  it("careerSchema requires a non-empty skills array", () => {
+    expect(careerSchema.safeParse({ skills: [] }).success).toBe(false);
     expect(careerSchema.safeParse({ skills: "React, Node" }).success).toBe(
-      true
+      false
     );
+    expect(
+      careerSchema.safeParse({ skills: ["React", "Node"] }).success
+    ).toBe(true);
   });
 
   it("resumeAnalyserSchema requires pdfBase64", () => {
