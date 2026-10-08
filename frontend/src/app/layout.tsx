@@ -4,6 +4,7 @@ import NavBar from "@/components/navbar";
 import Footer from "@/components/footer";
 import { ThemeProvider } from "@/components/theme-provider";
 import { AppProvider } from "@/context/AppContext";
+import { WebVitals } from "@/components/web-vitals";
 
 export const metadata: Metadata = {
   title: "HireHeaven — Find Your Dream Job",
@@ -19,6 +20,7 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning>
       <body>
+        <WebVitals />
         <AppProvider>
           <ThemeProvider
             attribute="class"
